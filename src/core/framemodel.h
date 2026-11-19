@@ -2,6 +2,7 @@
 
 #include "canframe.h"
 #include "framefilter.h"
+#include "framesearch.h"
 #include "ringbuffer.h"
 #include "dbc.h"
 
@@ -41,6 +42,7 @@ public:
         FreshRole,   // true for rows added by the most recent append()
         DeltaRole,   // time since the previous frame with the same ID, ms text
         MessageNameRole, // name from the loaded database ("" if unknown)
+        MatchRole,       // true if the row matches the current search
     };
     Q_ENUM(Role)
 
@@ -75,6 +77,14 @@ public:
     // Decoded signals of a view row (empty without a database / unknown ID).
     Q_INVOKABLE QVariantList decodedSignals(int row) const;
 
+    // Trace search. Rows matching the search get MatchRole = true.
+    void setSearch(const FrameSearch &search);
+    const FrameSearch &search() const { return m_search; }
+    // Next matching view row after `fromRow` (forward) or before it; wraps
+    // around once. -1 if nothing matches. fromRow may be -1 / count().
+    int findMatch(int fromRow, bool forward) const;
+    int matchCount() const;
+
 signals:
     void countChanged();
     void capacityChanged();
@@ -98,6 +108,7 @@ private:
     std::uint64_t m_freshFromSeq = 0;
     FrameFilter m_filter;
     std::shared_ptr<const Database> m_db;
+    FrameSearch m_search;
 };
 
 } // namespace can

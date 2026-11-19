@@ -152,6 +152,46 @@ private slots:
         QCOMPARE(int(session.timeSeries()->totalSamples()), 0);
         session.stop();
     }
+
+    void layoutSaveRestore()
+    {
+        PlotModel m;
+        m.setDatabase(demoDatabase());
+        QVERIFY(m.applyDemoLayout());
+        QCOMPARE(m.count(), 4);
+        QCOMPARE(m.seriesCount(), 6);
+        m.addThreshold(1, 42.5);
+        m.setYLock(2, true, -100, 100);
+        m.toggleVisible(0, idOf(QStringLiteral("EngineData"), QStringLiteral("EngineSpeed")));
+        const QString json = m.saveLayout();
+        QVERIFY(json.contains(QStringLiteral("VehicleDynamics.VehicleSpeed")));
+
+        PlotModel other;
+        QAbstractItemModelTester tester(&other, QAbstractItemModelTester::FailureReportingMode::QtTest);
+        QCOMPARE(other.restoreLayout(json), 0); // no database yet
+        other.setDatabase(demoDatabase());
+        QCOMPARE(other.restoreLayout(json), 6);
+        QCOMPARE(other.count(), 4);
+        QCOMPARE(other.lane(1).thresholds.size(), 1u);
+        QCOMPARE(other.lane(1).thresholds[0], 42.5);
+        QVERIFY(other.lane(2).yLocked);
+        QCOMPARE(other.lane(2).yMin, -100.0);
+        QVERIFY(!other.lane(0).series[1].visible);
+        QCOMPARE(other.lane(3).weight, 0.7);
+        QCOMPARE(other.saveLayout(), json);
+
+        // Unknown signals are skipped, broken JSON is ignored.
+        QString partial = json;
+        partial.replace(QStringLiteral("SteeringAngle"), QStringLiteral("NoSuchSignal"));
+        PlotModel third;
+        third.setDatabase(demoDatabase());
+        QCOMPARE(third.restoreLayout(partial), 5);
+        QCOMPARE(third.count(), 3);
+        QCOMPARE(third.restoreLayout(QStringLiteral("{oops")), 0);
+        QCOMPARE(third.count(), 3);
+        QCOMPARE(m.signalInfo(idOf(QStringLiteral("EngineData"), QStringLiteral("ThrottlePosition")))
+                     .value(QStringLiteral("resolution")).toDouble(), 0.4);
+    }
 };
 
 QTEST_GUILESS_MAIN(TstPlotModel)

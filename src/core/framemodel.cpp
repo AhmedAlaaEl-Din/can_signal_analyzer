@@ -21,7 +21,12 @@ int FrameModel::columnCount(const QModelIndex &parent) const
 
 const CanFrame &FrameModel::frameAt(int row) const
 {
-    return m_buffer.bySeq(m_rows[static_cast<std::size_t>(row)]);
+    return m_buffer.bySeq(m_rows[static_cast<std::size_t>(row)]).frame;
+}
+
+std::int64_t FrameModel::deltaAt(int row) const
+{
+    return m_buffer.bySeq(m_rows[static_cast<std::size_t>(row)]).deltaUs;
 }
 
 int FrameModel::rowForSeq(qulonglong seq) const
@@ -38,13 +43,15 @@ QVariant FrameModel::data(const QModelIndex &index, int role) const
     if (!index.isValid() || index.row() < 0 || index.row() >= count())
         return {};
     const std::uint64_t seq = m_rows[static_cast<std::size_t>(index.row())];
-    const CanFrame &f = m_buffer.bySeq(seq);
+    const Entry &entry = m_buffer.bySeq(seq);
+    const CanFrame &f = entry.frame;
 
     if (role == Qt::DisplayRole) {
         switch (index.column()) {
         case TimeColumn: role = TimeRole; break;
         case ChannelColumn: role = ChannelRole; break;
         case IdColumn: role = IdRole; break;
+        case DeltaColumn: role = DeltaRole; break;
         case DlcColumn: role = DlcRole; break;
         case DataColumn: role = DataRole; break;
         default: return {};
@@ -60,6 +67,9 @@ QVariant FrameModel::data(const QModelIndex &index, int role) const
     case SeqRole: return QVariant::fromValue<qulonglong>(seq);
     case OrdinalRole: return QVariant::fromValue<qulonglong>(m_removedFromFront + static_cast<std::uint64_t>(index.row()));
     case FreshRole: return seq >= m_freshFromSeq;
+    case DeltaRole:
+        return entry.deltaUs < 0 ? QStringLiteral("—")
+                                 : QString::number(static_cast<double>(entry.deltaUs) / 1000.0, 'f', 3);
     case Qt::TextAlignmentRole:
         return index.column() == DataColumn || index.column() == IdColumn
                    ? int(Qt::AlignLeft | Qt::AlignVCenter)
@@ -76,6 +86,7 @@ QVariant FrameModel::headerData(int section, Qt::Orientation orientation, int ro
     case TimeColumn: return QStringLiteral("Time (s)");
     case ChannelColumn: return QStringLiteral("Ch");
     case IdColumn: return QStringLiteral("ID");
+    case DeltaColumn: return QStringLiteral("Δt (ms)");
     case DlcColumn: return QStringLiteral("DLC");
     case DataColumn: return QStringLiteral("Data");
     default: return {};
@@ -95,6 +106,7 @@ QHash<int, QByteArray> FrameModel::roleNames() const
         {SeqRole, "seq"},
         {OrdinalRole, "ordinal"},
         {FreshRole, "fresh"},
+        {DeltaRole, "delta"},
     });
     return names;
 }
@@ -105,6 +117,7 @@ void FrameModel::setCapacity(int capacity)
         return;
     beginResetModel();
     m_buffer.setCapacity(static_cast<std::size_t>(capacity));
+    m_lastSeenUs.clear();
     m_rows.clear();
     m_removedFromFront = 0;
     endResetModel();
@@ -117,8 +130,15 @@ void FrameModel::append(const CanFrame *frames, std::size_t n)
     if (n == 0)
         return;
     const std::uint64_t firstNewSeq = m_buffer.nextSeq();
-    for (std::size_t i = 0; i < n; ++i)
-        m_buffer.push(frames[i]);
+    for (std::size_t i = 0; i < n; ++i) {
+        Entry entry{frames[i], -1};
+        auto [it, inserted] = m_lastSeenUs.try_emplace(frames[i].key(), frames[i].timestampUs);
+        if (!inserted) {
+            entry.deltaUs = frames[i].timestampUs - it->second;
+            it->second = frames[i].timestampUs;
+        }
+        m_buffer.push(entry);
+    }
     m_freshFromSeq = firstNewSeq;
 
     // 1. Visible rows whose frame was evicted from the ring buffer.
@@ -137,7 +157,7 @@ void FrameModel::append(const CanFrame *frames, std::size_t n)
     std::vector<std::uint64_t> added;
     added.reserve(n);
     for (std::uint64_t seq = std::max(firstNewSeq, oldest); seq < m_buffer.nextSeq(); ++seq) {
-        if (m_filter.matches(m_buffer.bySeq(seq)))
+        if (m_filter.matches(m_buffer.bySeq(seq).frame))
             added.push_back(seq);
     }
     if (!added.empty()) {
@@ -167,7 +187,7 @@ void FrameModel::rebuild()
     m_removedFromFront = 0;
     m_freshFromSeq = m_buffer.nextSeq(); // nothing is "fresh" after a re-filter
     for (std::uint64_t seq = m_buffer.firstSeq(); seq < m_buffer.nextSeq(); ++seq) {
-        if (m_filter.matches(m_buffer.bySeq(seq)))
+        if (m_filter.matches(m_buffer.bySeq(seq).frame))
             m_rows.push_back(seq);
     }
     endResetModel();
@@ -178,6 +198,7 @@ void FrameModel::clear()
 {
     beginResetModel();
     m_buffer.clear();
+    m_lastSeenUs.clear();
     m_rows.clear();
     m_removedFromFront = 0;
     m_freshFromSeq = m_buffer.nextSeq();

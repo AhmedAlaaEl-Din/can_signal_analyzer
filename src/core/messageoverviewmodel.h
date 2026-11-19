@@ -77,6 +77,9 @@ public:
     };
     const Entry *entryFor(std::uint32_t id, bool extended) const;
 
+    // Coarse sort key for live numeric columns (two significant digits).
+    static double sortBucket(double value);
+
 signals:
     void countChanged();
     void sortChanged();

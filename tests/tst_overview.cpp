@@ -131,6 +131,31 @@ private slots:
         QCOMPARE(m.data(m.index(2, 0), MessageOverviewModel::IdRole).toString(), QStringLiteral("100"));
     }
 
+    void sortBucketRounding()
+    {
+        QCOMPARE(MessageOverviewModel::sortBucket(0), 0.0);
+        QCOMPARE(MessageOverviewModel::sortBucket(7177), 7200.0);
+        QCOMPARE(MessageOverviewModel::sortBucket(7178), 7200.0);
+        QVERIFY(qFuzzyCompare(MessageOverviewModel::sortBucket(1.84), 1.8));
+        QCOMPARE(MessageOverviewModel::sortBucket(183.2), 180.0);
+    }
+
+    void nearTiesKeepIdOrder()
+    {
+        // Two IDs whose counts differ by one must not swap places on every update.
+        MessageOverviewModel m;
+        std::vector<CanFrame> batch;
+        for (int i = 0; i < 1000; ++i)
+            batch.push_back(frame(0x300, i * 1000));
+        for (int i = 0; i < 1001; ++i)
+            batch.push_back(frame(0x200, i * 1000));
+        m.update(batch);
+        m.sortBy(MessageOverviewModel::CountColumn);
+        QCOMPARE(m.data(m.index(0, 0), MessageOverviewModel::IdRole).toString(), QStringLiteral("200"));
+        m.update(std::vector<CanFrame>{frame(0x300, 2'000'000), frame(0x300, 2'001'000)});
+        QCOMPARE(m.data(m.index(0, 0), MessageOverviewModel::IdRole).toString(), QStringLiteral("200"));
+    }
+
     void clearEmpties()
     {
         MessageOverviewModel m;

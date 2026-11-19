@@ -1,6 +1,7 @@
 #include "messageoverviewmodel.h"
 
 #include <algorithm>
+#include <cmath>
 #include <numeric>
 
 namespace can {
@@ -110,6 +111,15 @@ QHash<int, QByteArray> MessageOverviewModel::roleNames() const
     return names;
 }
 
+double MessageOverviewModel::sortBucket(double value)
+{
+    // Round to two significant digits: 7177 -> 7200, 1.84 -> 1.8, 183.2 -> 180.
+    if (value <= 0)
+        return 0;
+    const double magnitude = std::pow(10.0, std::floor(std::log10(value)) - 1);
+    return std::round(value / magnitude) * magnitude;
+}
+
 bool MessageOverviewModel::lessThan(const Entry &a, const Entry &b) const
 {
     auto idKey = [](const Entry &e) {
@@ -124,9 +134,11 @@ bool MessageOverviewModel::lessThan(const Entry &a, const Entry &b) const
     switch (m_sortColumn) {
     case ChannelColumn: return cmp(a.last.channel, b.last.channel);
     case DlcColumn: return cmp(a.last.dlc, b.last.dlc);
-    case CountColumn: return cmp(a.count, b.count);
-    case PeriodColumn: return cmp(a.period.periodMs(), b.period.periodMs());
-    case LastSeenColumn: return cmp(a.last.timestampUs, b.last.timestampUs);
+    // Live values are compared coarsely so rows with practically equal values
+    // keep their ID order instead of swapping places on every update.
+    case CountColumn: return cmp(sortBucket(double(a.count)), sortBucket(double(b.count)));
+    case PeriodColumn: return cmp(sortBucket(a.period.periodMs()), sortBucket(b.period.periodMs()));
+    case LastSeenColumn: return cmp(a.last.timestampUs / 1000000, b.last.timestampUs / 1000000);
     case DataColumn: return cmp(a.last.data, b.last.data);
     case IdColumn:
     default:

@@ -108,6 +108,27 @@ private slots:
         QCOMPARE(m.frameAt(0).timestampUs, 8000);
     }
 
+    void deltaPerId()
+    {
+        FrameModel m;
+        m.append(frames(8)); // ids 100..103 round robin, 1 ms apart
+        QCOMPARE(m.deltaAt(0), std::int64_t(-1));   // first 0x100
+        QCOMPARE(m.deltaAt(3), std::int64_t(-1));   // first 0x103
+        QCOMPARE(m.deltaAt(4), std::int64_t(4000)); // second 0x100, 4 ms later
+        QCOMPARE(m.data(m.index(4, FrameModel::DeltaColumn)).toString(), QStringLiteral("4.000"));
+        QCOMPARE(m.data(m.index(0, FrameModel::DeltaColumn)).toString(), QStringLiteral("—"));
+        // Delta survives filtering (it is computed on arrival, over all frames).
+        FrameFilter f;
+        QVERIFY(f.setIdExpression(QStringLiteral("101")));
+        m.setFilter(f);
+        QCOMPARE(m.deltaAt(1), std::int64_t(4000));
+        m.setFilter(FrameFilter{});
+        m.clear();
+        m.append(frames(1, 0x100, 50000));
+        QCOMPARE(m.rowCount(), 1);
+        QCOMPARE(m.deltaAt(0), std::int64_t(-1)); // history reset by clear()
+    }
+
     void rowForSeq()
     {
         FrameModel m;

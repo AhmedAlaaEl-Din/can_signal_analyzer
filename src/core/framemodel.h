@@ -7,6 +7,7 @@
 #include <QAbstractTableModel>
 
 #include <deque>
+#include <unordered_map>
 #include <vector>
 
 namespace can {
@@ -24,7 +25,7 @@ class FrameModel : public QAbstractTableModel
     Q_PROPERTY(int capacity READ capacity WRITE setCapacity NOTIFY capacityChanged)
 
 public:
-    enum Column { TimeColumn, ChannelColumn, IdColumn, DlcColumn, DataColumn, ColumnCount };
+    enum Column { TimeColumn, ChannelColumn, IdColumn, DeltaColumn, DlcColumn, DataColumn, ColumnCount };
     enum Role {
         TimeRole = Qt::UserRole + 1,
         ChannelRole,
@@ -35,6 +36,7 @@ public:
         SeqRole,     // stable identity of the row (sequence number)
         OrdinalRole, // stable running index inside the filtered view (zebra striping)
         FreshRole,   // true for rows added by the most recent append()
+        DeltaRole,   // time since the previous frame with the same ID, ms text
     };
     Q_ENUM(Role)
 
@@ -61,6 +63,8 @@ public:
 
     // Direct access for tests and C++ callers. row is a view row.
     const CanFrame &frameAt(int row) const;
+    // Microseconds since the previous frame with the same ID (-1 for the first one).
+    std::int64_t deltaAt(int row) const;
     Q_INVOKABLE int rowForSeq(qulonglong seq) const; // -1 if not visible
 
 signals:
@@ -73,7 +77,14 @@ signals:
 private:
     void rebuild();
 
-    RingBuffer<CanFrame> m_buffer;
+    struct Entry
+    {
+        CanFrame frame;
+        std::int64_t deltaUs = -1;
+    };
+
+    RingBuffer<Entry> m_buffer;
+    std::unordered_map<std::uint32_t, std::int64_t> m_lastSeenUs; // per ID key
     std::deque<std::uint64_t> m_rows; // sequence numbers of visible frames
     std::uint64_t m_removedFromFront = 0; // for stable ordinals
     std::uint64_t m_freshFromSeq = 0;

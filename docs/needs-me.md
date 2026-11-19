@@ -13,8 +13,8 @@ Items that need the owner's attention or decision. Nothing is blocking.
    pre-approved.
 4. **Git identity.** Commits use your global git identity; the commit message trailer names
    the assistant as co-author. Amend if you want a different attribution.
-5. **Qt Creator kits.** The Qt installer registered its kits with `C:\Qt\Qt6.12` paths, but Qt
-   is on `D:`. Follow "Opening the project in Qt Creator 21" in the README to create a
+5. **Qt Creator kits.** The Qt installer registered its kits with paths on a different drive
+   than the actual Qt installation. Follow "Opening the project in Qt Creator 21" in the README to create a
    working kit once. Optional: install "Debugging Tools for Windows" (Windows SDK) if you
    want to debug with the MSVC kit; I did not install anything.
 

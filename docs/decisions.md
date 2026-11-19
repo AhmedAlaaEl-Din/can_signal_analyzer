@@ -133,7 +133,7 @@ Findings → changes:
   The project's modules are compiled into the exe, so their output folder only matters
   to tooling.
 - **Qt Creator 21 setup documented in the README** after checking this machine: the
-  installer-registered kits/Qt versions/CMake point to a non-existent `C:\Qt\Qt6.12`, so the
+  installer-registered kits/Qt versions/CMake point to a drive where Qt is not installed, so the
   README describes a manual kit (Qt version, auto-detected VS 2026 compiler, Qt's CMake,
   Ninja via `CMAKE_MAKE_PROGRAM`). CDB is not installed, so debugging with the MSVC kit is
   not available until the Windows SDK debugging tools are added.

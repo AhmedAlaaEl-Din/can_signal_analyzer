@@ -131,7 +131,7 @@ deploy only), `-Preset <name>`, `-AppArgs '--rate','2000'`.
 After the deploy step the executable is:
 
 ```
-<repo>\build\local-release\can_analyzer.exe      (e.g. E:\can_analyzer\build\local-release\can_analyzer.exe)
+<repo>\build\local-release\can_analyzer.exe
 ```
 
 That folder then also holds the Qt DLLs, plugins and QML modules, so the exe can be
@@ -153,27 +153,29 @@ Command-line options: `--rate <fps>` (initial rate, `0` = nominal ≈366/s), `--
 
 ## Opening the project in Qt Creator 21
 
-The values below were checked on the development machine (Qt installed under
-`D:\Qt\Qt6.12`, Visual Studio Community 2026). Replace the paths with yours if your
-installation differs.
+Placeholders: `<QtDir>` is the folder you installed Qt into (the one that contains
+`6.12.0\` and `Tools\`, e.g. `C:\Qt`), `<repo>` is your clone of this repository. The
+versions are the ones the project was developed and checked with.
 
-| What | Path / value on the development machine |
+| What | Path / value |
 |---|---|
-| Qt Creator 21 | `D:\Qt\Qt6.12\Tools\Qt Creator 21.0.0-rc1\bin\qtcreator.exe` (21.0.0-rc1). Note: `D:\Qt\Qt6.12\Tools\QtCreator\bin\qtcreator.exe` is the older **20.0.2**. |
-| Qt version (qmake) | `D:\Qt\Qt6.12\6.12.0\msvc2022_64\bin\qmake.exe` (Qt 6.12.0) |
-| CMake | `D:\Qt\Qt6.12\Tools\CMake_64\bin\cmake.exe` (3.30.5) |
-| Ninja | `D:\Qt\Qt6.12\Tools\Ninja\ninja.exe` (1.12.1) |
+| Qt Creator 21 | `<QtDir>\Tools\Qt Creator 21.0.0-rc1\bin\qtcreator.exe` (21.0.0-rc1). If both are installed, `<QtDir>\Tools\QtCreator\bin\qtcreator.exe` may be an older release (20.0.2 on the development machine). |
+| Qt version (qmake) | `<QtDir>\6.12.0\msvc2022_64\bin\qmake.exe` (Qt 6.12.0) |
+| CMake | `<QtDir>\Tools\CMake_64\bin\cmake.exe` (3.30.5) |
+| Ninja | `<QtDir>\Tools\Ninja\ninja.exe` (1.12.1) |
 | MSVC | Visual Studio Community 2026 18.12, MSVC toolset 14.52.37025; `C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvarsall.bat` |
 
-**Known issue on this machine:** the Qt installer registered its kits, Qt versions, CMake
-and MinGW entries with `C:\Qt\Qt6.12\...` paths, but Qt is installed on `D:`. The
-pre-made kit **"Desktop Qt 6.12.0 MSVC2022 64bit"** therefore shows a red error (Qt version
-and CMake not found). Do not use it; set up the pieces once as below.
+**Known issue:** on the development machine the Qt installer registered its kits, Qt
+versions, CMake and MinGW entries under a different drive than the one Qt was actually
+installed on. The pre-made kit **"Desktop Qt 6.12.0 MSVC2022 64bit"** then shows a red
+error (Qt version and CMake not found). If yours shows that error, do not use it; set up
+the pieces once as below. If it is fine, you can pick it and skip to "Open, build, run"
+(still add the Ninja line from step 4).
 
 ### One-time setup: Edit → Preferences → Kits
 
 1. **Qt Versions** tab → **Add…** → select
-   `D:\Qt\Qt6.12\6.12.0\msvc2022_64\bin\qmake.exe` → it appears as
+   `<QtDir>\6.12.0\msvc2022_64\bin\qmake.exe` → it appears as
    "Qt 6.12.0 MSVC2022 64bit" under *Manual* → **Apply**.
 2. **Compilers** tab → check *Auto-detected* → **C++** for an entry named
    "Microsoft Visual C++ Compiler 18.12… (amd64)". Qt Creator finds Visual Studio itself,
@@ -181,18 +183,17 @@ and CMake not found). Do not use it; set up the pieces once as below.
    `C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvarsall.bat`,
    argument `amd64` → **Apply**. Repeat for **C** if you like (only C++ is used).
 3. **CMake** tab (in some versions: *Preferences → CMake → Tools*) → **Add** →
-   Path `D:\Qt\Qt6.12\Tools\CMake_64\bin\cmake.exe`, name e.g. "CMake 3.30.5 (Qt, D:)"
-   → **Apply**. The auto-detected "CMake 3.30.5 (Qt)" entry points to the missing `C:`
-   path; ignore it.
+   Path `<QtDir>\Tools\CMake_64\bin\cmake.exe`, name e.g. "CMake 3.30.5 (Qt, manual)"
+   → **Apply**. If the auto-detected "CMake 3.30.5 (Qt)" entry shows an error, ignore it.
 4. **Kits** tab → **Add** → fill in:
-   - Name: `Qt 6.12.0 MSVC 64-bit (D:)`
+   - Name: `Qt 6.12.0 MSVC 64-bit (manual)`
    - Compiler C++: the *Microsoft Visual C++ Compiler 18.12… (amd64)* entry from step 2
      (C: the matching C entry, or leave it)
    - Qt version: *Qt 6.12.0 MSVC2022 64bit* from step 1
    - CMake Tool: the entry from step 3
    - CMake generator: **Ninja**
    - CMake Configuration → **Change…** → add the line
-     `CMAKE_MAKE_PROGRAM:FILEPATH=D:/Qt/Qt6.12/Tools/Ninja/ninja.exe`
+     `CMAKE_MAKE_PROGRAM:FILEPATH=<QtDir>/Tools/Ninja/ninja.exe` (with forward slashes)
      (Ninja is not on PATH, so CMake must be told where it is)
    - Debugger: none is available (see below)
    → **Apply** / **OK**. The kit must show no red error icon.
@@ -200,7 +201,7 @@ and CMake not found). Do not use it; set up the pieces once as below.
 ### Open, build, run
 
 1. **File → Open File or Project…** → select `<repo>\CMakeLists.txt`.
-2. On the *Configure Project* page tick only the kit **Qt 6.12.0 MSVC 64-bit (D:)** and
+2. On the *Configure Project* page tick only the kit **Qt 6.12.0 MSVC 64-bit (manual)** and
    its **Release** build (Debug is fine too). Qt Creator also lists the CMake presets from
    `CMakePresets.json` / `CMakeUserPresets.json` (`release`, `debug`, `local-release`)
    as extra entries; leave those unticked. Click **Configure Project**.
@@ -210,7 +211,7 @@ and CMake not found). Do not use it; set up the pieces once as below.
    *Projects → Run → Command line arguments*.
 4. The unit tests appear under **Tools → Tests** (CTest) and can be run from there.
 
-**Debugging:** this machine has no CDB (the "Debugging Tools for Windows" feature of the
+**Debugging:** the development machine has no CDB (the "Debugging Tools for Windows" feature of the
 Windows SDK is not installed), so the MSVC kit can build and run but not debug. Installing
 that Windows SDK feature adds `cdb.exe`, which Qt Creator then detects automatically.
 

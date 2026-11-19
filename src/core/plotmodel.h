@@ -18,6 +18,7 @@ class PlotModel : public QAbstractListModel
     Q_OBJECT
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(int seriesCount READ seriesCount NOTIFY countChanged)
+    Q_PROPERTY(double totalWeight READ totalWeight NOTIFY weightsChanged)
 
 public:
     static constexpr int kPaletteSize = 8;
@@ -59,6 +60,7 @@ public:
     void setDatabase(std::shared_ptr<const Database> db);
     int count() const { return static_cast<int>(m_lanes.size()); }
     int seriesCount() const;
+    double totalWeight() const;
     const Lane &lane(int i) const { return m_lanes[static_cast<std::size_t>(i)]; }
 
     // Adds a signal to lane `laneIndex` (-1 = a new lane at the end). Returns
@@ -84,6 +86,7 @@ public:
 
 signals:
     void countChanged();
+    void weightsChanged();
 
 private:
     const SignalDef *def(int signalId) const;

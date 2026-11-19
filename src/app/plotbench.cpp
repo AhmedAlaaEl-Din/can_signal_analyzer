@@ -60,7 +60,7 @@ Window {
                 width: parent.width
                 height: (parent.height - 36) / 4
                 store: window.store
-                palette: window.pal
+                colors: window.pal
                 series: [ { signalId: index * 2, color: index * 2, visible: true },
                           { signalId: index * 2 + 1, color: index * 2 + 1, visible: true, dashed: index % 2 === 1 } ]
                 viewStartUs: window.t0

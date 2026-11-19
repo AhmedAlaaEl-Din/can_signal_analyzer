@@ -115,6 +115,14 @@ int PlotModel::seriesCount() const
     return n;
 }
 
+double PlotModel::totalWeight() const
+{
+    double w = 0;
+    for (const auto &l : m_lanes)
+        w += l.weight;
+    return w;
+}
+
 int PlotModel::nextColor() const
 {
     std::vector<int> used(kPaletteSize, 0);
@@ -192,6 +200,7 @@ int PlotModel::addLane()
     m_lanes.push_back(l);
     endInsertRows();
     emit countChanged();
+    emit weightsChanged();
     return row;
 }
 
@@ -203,6 +212,7 @@ void PlotModel::removeLane(int laneIndex)
     m_lanes.erase(m_lanes.begin() + laneIndex);
     endRemoveRows();
     emit countChanged();
+    emit weightsChanged();
 }
 
 void PlotModel::moveLane(int from, int to)
@@ -223,6 +233,7 @@ void PlotModel::setWeight(int laneIndex, double weight)
         return;
     m_lanes[static_cast<std::size_t>(laneIndex)].weight = std::clamp(weight, 0.25, 4.0);
     laneChanged(laneIndex, {WeightRole});
+    emit weightsChanged();
 }
 
 void PlotModel::setYLock(int laneIndex, bool locked, double yMin, double yMax)

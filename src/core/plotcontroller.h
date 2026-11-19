@@ -74,6 +74,7 @@ public:
     Q_INVOKABLE double xOfTime(double timeUs, double widthPx) const;
     Q_INVOKABLE QString formatTime(double timeUs) const;
     Q_INVOKABLE QString formatValue(double value, int decimals) const;
+    Q_INVOKABLE QString localPath(const QUrl &url) const { return url.isLocalFile() ? url.toLocalFile() : url.toString(); }
 
     // Writes the visible time range of the given signals as CSV (one column
     // per signal, one row per sample time). Returns false and sets lastError

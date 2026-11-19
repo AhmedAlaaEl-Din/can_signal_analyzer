@@ -154,7 +154,7 @@ void PlotCanvas::setSeries(const QVariantList &s)
     changed();
 }
 
-void PlotCanvas::setPalette(const QVariantList &p)
+void PlotCanvas::setColors(const QVariantList &p)
 {
     m_paletteVar = p;
     m_palette.clear();
@@ -190,6 +190,16 @@ void PlotCanvas::setYMax(double v)
     if (v == m_yMax)
         return;
     m_yMax = v;
+    m_geometryDirty = true;
+    emit inputsChanged();
+    update();
+}
+
+void PlotCanvas::setRangesById(const QVariantMap &r)
+{
+    if (r == m_rangesById)
+        return;
+    m_rangesById = r;
     m_geometryDirty = true;
     emit inputsChanged();
     update();
@@ -258,6 +268,7 @@ void PlotCanvas::updatePolish()
     const qreal dpr = window() ? window()->effectiveDevicePixelRatio() : 1.0;
     const int columns = std::max(1, static_cast<int>(w * dpr));
     bool fillAssigned = false;
+    QVariantList ranges;
 
     if (m_store && w > 1 && t1 > t0) {
         std::vector<can::TimeSample> raw;
@@ -269,6 +280,8 @@ void PlotCanvas::updatePolish()
             if (!ts || ts->empty())
                 continue;
             Prepared p;
+            p.signalId = m.value(QStringLiteral("signalId")).toInt();
+            double sLo = 1e300, sHi = -1e300;
             const int ci = m.value(QStringLiteral("color")).toInt();
             p.color = m_palette.empty() ? QColor(Qt::gray) : m_palette[static_cast<std::size_t>(ci) % m_palette.size()];
             p.dashed = m.value(QStringLiteral("dashed")).toBool();
@@ -286,9 +299,8 @@ void PlotCanvas::updatePolish()
                     p.xs.push_back(static_cast<double>(s.t - t0) * scale);
                     p.values.push_back(s.v);
                     if (s.t >= t0 && s.t <= t1) {
-                        lo = std::min(lo, s.v);
-                        hi = std::max(hi, s.v);
-                        any = true;
+                        sLo = std::min(sLo, s.v);
+                        sHi = std::max(sHi, s.v);
                     }
                 }
             } else {
@@ -305,17 +317,26 @@ void PlotCanvas::updatePolish()
                     p.values.push_back(cs.last);
                     p.bandMin.push_back(cs.min);
                     p.bandMax.push_back(cs.max);
-                    lo = std::min(lo, cs.min);
-                    hi = std::max(hi, cs.max);
-                    any = true;
+                    sLo = std::min(sLo, cs.min);
+                    sHi = std::max(sHi, cs.max);
                 }
+            }
+            if (sLo <= sHi) {
+                lo = std::min(lo, sLo);
+                hi = std::max(hi, sHi);
+                any = true;
+                ranges << QVariantMap{{QStringLiteral("signalId"), p.signalId},
+                                      {QStringLiteral("min"), sLo},
+                                      {QStringLiteral("max"), sHi}};
             }
             pointsDrawn() += static_cast<qint64>(p.xs.size());
             m_prepared.push_back(std::move(p));
         }
     }
     m_geometryDirty = true;
-    if (any != m_hasData || (any && (lo != m_dataMin || hi != m_dataMax)) || zoomedOut != m_zoomedOut) {
+    const bool rangesChanged = ranges != m_seriesRanges;
+    m_seriesRanges = ranges;
+    if (rangesChanged || any != m_hasData || (any && (lo != m_dataMin || hi != m_dataMax)) || zoomedOut != m_zoomedOut) {
         m_hasData = any;
         if (any) {
             m_dataMin = lo;
@@ -338,12 +359,12 @@ QSGNode *PlotCanvas::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
         delete child;
     }
     const double h = height();
-    const double span = m_yMax - m_yMin;
-    if (span <= 0 || h <= 1) {
+    if (m_yMax - m_yMin <= 0 || h <= 1) {
         m_geometryDirty = false;
         return root;
     }
-    auto yOf = [&](double v) { return static_cast<float>(h - (v - m_yMin) / span * h); };
+    double yLo = m_yMin, ySpan = m_yMax - m_yMin;
+    auto yOf = [&](double v) { return static_cast<float>(h - (v - yLo) / ySpan * h); };
     const float halfWidth = static_cast<float>(m_lineWidth / 2.0);
     std::vector<QPointF> pts;
     std::vector<QSGGeometry::Point2D> verts;
@@ -351,6 +372,14 @@ QSGNode *PlotCanvas::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
     for (const Prepared &p : m_prepared) {
         if (p.xs.empty())
             continue;
+        // Per-series range (secondary axis) or the lane's main range.
+        yLo = m_yMin;
+        ySpan = m_yMax - m_yMin;
+        const QVariantList own = m_rangesById.value(QString::number(p.signalId)).toList();
+        if (own.size() == 2 && own[1].toDouble() > own[0].toDouble()) {
+            yLo = own[0].toDouble();
+            ySpan = own[1].toDouble() - yLo;
+        }
         // Line points (step series repeat the previous value up to the next x).
         pts.clear();
         pts.reserve(p.xs.size() * (p.step ? 2 : 1));

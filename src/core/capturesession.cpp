@@ -144,8 +144,8 @@ void CaptureSession::applyDatabase()
     const auto db = m_database->database();
     m_frames->setDatabase(db);
     m_overview->setDatabase(db);
+    m_plotModel->setDatabase(db); // first: views of the signal model look up plot info
     m_signalModel->setDatabase(db);
-    m_plotModel->setDatabase(db);
 }
 
 qint64 CaptureSession::now() const

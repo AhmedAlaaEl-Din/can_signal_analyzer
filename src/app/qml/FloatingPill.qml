@@ -10,17 +10,19 @@ import "format.js" as Fmt
 Button {
     id: pill
     property bool detached: false
+    property string detachedText: qsTr("Jump to live")
+    property string detachedIcon: "arrow-down"
     readonly property bool paused: Session.paused
     readonly property bool shown: paused || detached
     signal jumpRequested()
 
     variant: "primary"
-    iconName: paused ? "play" : "arrow-down"
+    iconName: paused ? "play" : detachedIcon
     text: paused
           ? (Session.pendingWhilePaused > 0
              ? qsTr("Paused · %1 new frames waiting · Resume").arg(Fmt.grouped(Session.pendingWhilePaused))
              : qsTr("Paused · Resume"))
-          : qsTr("Jump to live")
+          : detachedText
     height: 30
     opacity: shown ? 1 : 0
     visible: opacity > 0.01

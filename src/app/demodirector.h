@@ -38,8 +38,8 @@ public:
 
     static constexpr int kFps = 12;
     static constexpr int kDemoDurationMs = 45000;
-    static constexpr int kCheckDurationMs = 18000;
-    static constexpr int kJpegQuality = 85; // 90 exceeded the 60 MB budget (see decisions)
+    static constexpr int kCheckDurationMs = 24000;
+    static constexpr int kJpegQuality = 80; // phase 3 plots: 85 gave 62.6 MB (see decisions)
 
     DemoDirector(Mode mode, QQuickWindow *window, can::CaptureSession *session,
                  const QString &outputDir, QObject *parent = nullptr);

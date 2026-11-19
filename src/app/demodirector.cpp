@@ -97,51 +97,66 @@ void DemoDirector::resizeWindow(int width, int height)
 
 void DemoDirector::buildDemoScript()
 {
-    // Scene (about 45 s): live trace without a database, load the demo
-    // database, decoded trace and messages, the Signals tab with search and
-    // pins, the signal detail with bit layout, a theme switch and back.
+    // Scene (about 45 s): Plots tab, load the demo database, three lanes
+    // (speed + rpm, throttle + torque, steering) plus a step plot for the gear,
+    // follow live, zoom, pan, cursors A/B with the delta readout, a legend
+    // toggle, a dragged threshold, a 30 s window with the min/max band, pause,
+    // and the light theme.
+    auto a = [this](double t, const QString &action, const QVariant &arg = {}) {
+        at(t, [this, action, arg] { act(action, arg); });
+    };
     at(0.0, [this] {
         act(QStringLiteral("theme"), QStringLiteral("dark"));
-        act(QStringLiteral("tab"), 0);
+        act(QStringLiteral("tab"), 3);
         act(QStringLiteral("names"), QStringLiteral("on"));
     });
-    at(0.6, [this] { m_session->start(); });
-    at(3.5, [this] { act(QStringLiteral("loadDemoDb")); });
-    at(5.0, [this] { m_session->setPaused(true); });  // freeze the view to inspect a frame
-    at(5.6, [this] { act(QStringLiteral("selectRow"), 9); });
-    at(7.0, [this] { screenshot(QStringLiteral("trace-decoded-dark")); });
-    at(7.6, [this] { m_session->setPaused(false); });
+    at(0.5, [this] { m_session->start(); });
+    a(1.5, QStringLiteral("loadDemoDb"));
+    a(3.0, QStringLiteral("plotAdd"), QStringLiteral("VehicleDynamics.VehicleSpeed@-1"));
+    a(3.6, QStringLiteral("plotAdd"), QStringLiteral("EngineData.EngineSpeed@0"));
+    a(4.4, QStringLiteral("plotAdd"), QStringLiteral("EngineData.ThrottlePosition@-1"));
+    a(5.0, QStringLiteral("plotAdd"), QStringLiteral("EngineData.EngineTorque@1"));
+    a(5.8, QStringLiteral("plotAdd"), QStringLiteral("VehicleDynamics.SteeringAngle@-1"));
+    a(6.6, QStringLiteral("plotAdd"), QStringLiteral("TransmissionStatus.CurrentGear@-1"));
+    at(9.5, [this] { screenshot(QStringLiteral("plots-live-dark")); });
 
-    at(8.0, [this] { act(QStringLiteral("tab"), 1); });
-    at(9.0, [this] { act(QStringLiteral("expandMessage"), QStringLiteral("100")); });
-    at(9.8, [this] { act(QStringLiteral("expandMessage"), QStringLiteral("0C8")); });
-    at(11.5, [this] { screenshot(QStringLiteral("messages-decoded-dark")); });
+    a(10.5, QStringLiteral("plotWindow"), 5);
+    a(12.5, QStringLiteral("plotWindow"), 10);
+    // Zoom in around 70 % of the width, then pan back in time.
+    a(13.6, QStringLiteral("plotZoom"), QStringLiteral("0.75@0.7"));
+    a(14.0, QStringLiteral("plotZoom"), QStringLiteral("0.75@0.7"));
+    a(14.4, QStringLiteral("plotZoom"), QStringLiteral("0.75@0.7"));
+    for (int i = 0; i < 10; ++i)
+        a(15.2 + 0.1 * i, QStringLiteral("plotPan"), -0.04);
+    a(17.0, QStringLiteral("plotCursors"), QStringLiteral("place"));
+    for (int i = 0; i <= 8; ++i) // drag cursor B to the right
+        a(17.6 + 0.1 * i, QStringLiteral("plotCursor"), QStringLiteral("1@%1").arg(0.62 + 0.02 * i));
+    a(18.8, QStringLiteral("plotHover"), 0.47);
+    at(20.0, [this] { screenshot(QStringLiteral("plots-cursors-dark")); });
+    a(20.6, QStringLiteral("plotHover"), -1);
 
-    at(12.5, [this] { act(QStringLiteral("tab"), 2); });
-    at(15.5, [this] { screenshot(QStringLiteral("signals-dark")); });
+    a(21.2, QStringLiteral("plotToggle"), QStringLiteral("0@EngineData.EngineSpeed"));
+    a(22.6, QStringLiteral("plotToggle"), QStringLiteral("0@EngineData.EngineSpeed"));
+    a(23.4, QStringLiteral("plotThreshold"), QStringLiteral("1@46"));
+    for (int i = 1; i <= 16; ++i) // drag the threshold up (throttle %, left axis of lane 2)
+        a(23.8 + 0.1 * i, QStringLiteral("plotThresholdMove"), QStringLiteral("1@0@%1").arg(46.0 + 0.4 * i));
+    at(26.5, [this] { screenshot(QStringLiteral("plots-threshold-dark")); });
 
-    const QString query = QStringLiteral("temp");
-    for (int i = 1; i <= query.size(); ++i)
-        at(16.5 + 0.25 * i, [this, q = query.left(i)] { act(QStringLiteral("search"), q); });
-    at(18.6, [this] { act(QStringLiteral("pin"), QStringLiteral("EngineTemperatures.CoolantTemp")); });
-    at(19.6, [this] { act(QStringLiteral("search"), QString()); });
-    at(20.4, [this] { act(QStringLiteral("pin"), QStringLiteral("VehicleDynamics.VehicleSpeed")); });
-    at(21.0, [this] { act(QStringLiteral("pin"), QStringLiteral("EngineData.EngineSpeed")); });
-    at(21.6, [this] { act(QStringLiteral("pin"), QStringLiteral("TransmissionStatus.CurrentGear")); });
-    at(23.5, [this] { screenshot(QStringLiteral("signals-pinned-dark")); });
+    a(27.2, QStringLiteral("plotCursors"), QStringLiteral("clear"));
+    a(27.6, QStringLiteral("plotFollow"));
+    a(28.6, QStringLiteral("plotWindow"), 30);
+    at(31.0, [this] { screenshot(QStringLiteral("plots-30s-band-dark")); });
 
-    at(24.5, [this] { act(QStringLiteral("selectSignal"), QStringLiteral("EngineData.EngineTorque")); });
-    at(27.5, [this] { screenshot(QStringLiteral("signal-detail-dark")); });
-    at(29.0, [this] { act(QStringLiteral("theme"), QStringLiteral("light")); });
-    at(30.5, [this] { act(QStringLiteral("selectSignal"), QStringLiteral("VehicleDynamics.SteeringAngle")); });
-    at(33.5, [this] { screenshot(QStringLiteral("signal-detail-light")); });
-
-    at(35.0, [this] { act(QStringLiteral("closeSignal")); });
-    at(36.0, [this] { act(QStringLiteral("tab"), 0); });
-    at(38.5, [this] { act(QStringLiteral("names"), QStringLiteral("off")); });
-    at(40.5, [this] { act(QStringLiteral("names"), QStringLiteral("on")); });
-    at(41.5, [this] { act(QStringLiteral("theme"), QStringLiteral("dark")); });
-    at(43.0, [this] { act(QStringLiteral("tab"), 2); });
+    a(32.0, QStringLiteral("theme"), QStringLiteral("light"));
+    a(33.0, QStringLiteral("plotWindow"), 10);
+    at(35.0, [this] { screenshot(QStringLiteral("plots-light")); });
+    a(35.8, QStringLiteral("plotHover"), 0.62);
+    at(37.2, [this] { screenshot(QStringLiteral("plots-tooltip-light")); });
+    a(38.0, QStringLiteral("plotHover"), -1);
+    at(39.0, [this] { m_session->setPaused(true); }); // the view freezes, capture continues
+    at(41.5, [this] { m_session->setPaused(false); });
+    a(42.5, QStringLiteral("tab"), 2);
+    a(44.0, QStringLiteral("tab"), 3);
 }
 
 void DemoDirector::buildCheckScript()
@@ -194,10 +209,26 @@ void DemoDirector::buildCheckScript()
     at(15.0, [this] { screenshot(QStringLiteral("wide-signal-detail-mux-light")); });
     at(15.2, [this] { m_session->setVehicleMode(false); act(QStringLiteral("closeSignal")); act(QStringLiteral("tab"), 0); });
     at(17.0, [this] { screenshot(QStringLiteral("wide-trace-raw-mode-light")); });
+    at(17.2, [this] {
+        m_session->setVehicleMode(true);
+        act(QStringLiteral("theme"), QStringLiteral("dark"));
+        act(QStringLiteral("tab"), 3);
+    });
+    at(18.0, [this] { screenshot(QStringLiteral("plots-empty-dark")); });
+    at(18.2, [this] {
+        resizeWindow(960, 600);
+        act(QStringLiteral("plotAdd"), QStringLiteral("VehicleDynamics.VehicleSpeed@-1"));
+        act(QStringLiteral("plotAdd"), QStringLiteral("EngineData.EngineSpeed@0"));
+        act(QStringLiteral("plotAdd"), QStringLiteral("BrakeStatus.BrakePedalPressed@-1"));
+        act(QStringLiteral("plotCursors"), QStringLiteral("place"));
+    });
+    at(23.5, [this] { screenshot(QStringLiteral("min-size-plots-dark")); });
 }
 
 void DemoDirector::start()
 {
+    if (m_window) // keep the real mouse out of the captured frames
+        m_window->setProperty("demoMode", m_mode == Mode::Demo);
     if (m_mode == Mode::LayoutCheck) {
         m_wall.start();
         m_checkTimer.start();

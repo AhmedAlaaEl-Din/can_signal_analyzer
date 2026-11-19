@@ -35,6 +35,5 @@ Items that need the owner's attention or decision. Nothing is blocking.
     "Qt Graphs" module with the Qt Maintenance Tool; I did not install anything.
 13. **Try by hand once:** dragging a signal from the Plots picker onto a lane, and the PNG/CSV
     save dialogs (both exports were verified programmatically, not through the dialogs).
-14. **README screenshots (optional):** copy plot screenshots from `evidence/screenshots/` to
-    `docs/img/` and un-comment the Phase 3 placeholders in the README.
+14. ~~README screenshots~~ — done: `docs/img/plots-cursors-dark.png`, `docs/img/plots-tooltip-light.png`.
 

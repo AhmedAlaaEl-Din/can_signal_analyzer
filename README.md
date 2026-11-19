@@ -36,12 +36,10 @@ display scaling, 2000 simulated frames/s).
 **Phase 3 (plots):** `--demo` now records the Plots tab
 (`evidence/screenshots/01-plots-live-dark` … `06-plots-tooltip-light`).
 
-<!-- Placeholders: copy the screenshots you like from evidence/screenshots/ to docs/img/ and
-     un-comment these lines.
-![Plots, dark](docs/img/plots-dark.png)
-![Plots with cursors and threshold](docs/img/plots-cursors-dark.png)
-![Plots, light](docs/img/plots-light.png)
--->
+| | |
+|---|---|
+| ![Plots with cursors A/B and crosshair tooltip, dark theme](docs/img/plots-cursors-dark.png) | ![Plots with crosshair tooltip and threshold badge, light theme](docs/img/plots-tooltip-light.png) |
+| **Plots**: stacked lanes on one time axis, per-unit left/right axes, cursors A/B with Δt, frequency and per-signal deltas | **Plots, light theme**: crosshair tooltip with every visible value, dashed second series, threshold badge, gear as a step plot |
 
 Demo video: _link to be added_
 

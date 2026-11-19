@@ -87,3 +87,4 @@ powershell -ExecutionPolicy Bypass -File tools\zip-frames.ps1
 | 2026-11-19 05:14 | design.md, README, phase1-explained.md; `deploy` target verified (deployed exe runs without PATH changes). |
 | 2026-11-19 05:16 | Secrets scan clean; clean rebuild with 0 warnings; summary written. |
 | 2026-11-19 | Machine-specific toolchain allow rules moved to git-ignored `.claude/settings.local.json`; `settings.json` keeps generic rules only. |
+| 2026-11-19 07:59 | README screenshots: the 5 final window-only demo screenshots copied to `docs/img/` and linked in the README. |

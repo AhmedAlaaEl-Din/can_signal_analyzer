@@ -6,12 +6,23 @@ professional bus tool. C++20 core, Qt 6 Quick/QML front end, custom design syste
 Phase 1 has **no hardware**: frames come from a built-in, seeded simulator with invented
 message IDs. Later phases add signal decoding, plots, logging and replay.
 
-> Screenshots: `evidence/screenshots/` after running `--demo` (see below).
->
-> ![Trace, light](docs/img/trace-light.png) <!-- placeholder: copy 01-trace-live-light.png here -->
-> ![Messages, dark](docs/img/messages-dark.png) <!-- placeholder: copy 04-messages-dark.png here -->
->
-> Demo video: _link to be added_
+## Screenshots
+
+Captured by the app itself in `--demo` mode (application window only, 1280×800 at 125 %
+display scaling, 2000 simulated frames/s).
+
+| | |
+|---|---|
+| ![Live trace, dark theme](docs/img/trace-dark.png) | ![Live trace, light theme](docs/img/trace-light.png) |
+| **Trace, dark**: live stream following the newest frame | **Trace, light**: same view in the light theme |
+| ![Trace filtered by ID and paused](docs/img/trace-filtered-paused.png) | ![Messages overview, dark theme](docs/img/messages-dark.png) |
+| **Filtered and paused**: ID filter `123, 1A4`, selected row, frames held while paused | **Messages, dark**: one row per ID, sorted by count, changed bytes highlighted |
+
+![Messages overview, light theme](docs/img/messages-light.png)
+
+**Messages, light**: the same overview in the light theme.
+
+Demo video: _link to be added_
 
 ## Features
 

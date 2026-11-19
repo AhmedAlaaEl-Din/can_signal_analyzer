@@ -116,7 +116,29 @@ cmake --build --preset local-release
 ctest --preset local-release
 ```
 
-### Running
+### Build, deploy and run in one step (recommended)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run.ps1
+```
+
+`scripts/run.ps1` picks the `local-release` preset (or `release` + `QT_ROOT` when there is no
+user preset), loads the MSVC environment with `vswhere`/`vcvars64.bat` inside its own
+process, uses the CMake and Ninja that ship with Qt, builds, runs the `deploy` target
+(windeployqt) and starts the app, printing each step. Options: `-NoLaunch` (build and
+deploy only), `-Preset <name>`, `-AppArgs '--rate','2000'`.
+
+After the deploy step the executable is:
+
+```
+<repo>\build\local-release\can_analyzer.exe      (e.g. E:\can_analyzer\build\local-release\can_analyzer.exe)
+```
+
+That folder then also holds the Qt DLLs, plugins and QML modules, so the exe can be
+started by double-clicking it. With the generic `release` preset the folder is
+`build\release\` instead.
+
+### Running manually
 
 The build tree does not contain the Qt DLLs. Either put `%QT_ROOT%\bin` on PATH for the
 current shell, or deploy the runtime next to the executable once:
@@ -128,6 +150,69 @@ build\local-release\can_analyzer.exe
 
 Command-line options: `--rate <fps>` (initial rate, `0` = nominal ≈366/s), `--seed <n>`,
 `--capacity <frames>` (ring buffer size), `--demo`, `--layout-check`, `--evidence-dir <dir>`.
+
+## Opening the project in Qt Creator 21
+
+The values below were checked on the development machine (Qt installed under
+`D:\Qt\Qt6.12`, Visual Studio Community 2026). Replace the paths with yours if your
+installation differs.
+
+| What | Path / value on the development machine |
+|---|---|
+| Qt Creator 21 | `D:\Qt\Qt6.12\Tools\Qt Creator 21.0.0-rc1\bin\qtcreator.exe` (21.0.0-rc1). Note: `D:\Qt\Qt6.12\Tools\QtCreator\bin\qtcreator.exe` is the older **20.0.2**. |
+| Qt version (qmake) | `D:\Qt\Qt6.12\6.12.0\msvc2022_64\bin\qmake.exe` (Qt 6.12.0) |
+| CMake | `D:\Qt\Qt6.12\Tools\CMake_64\bin\cmake.exe` (3.30.5) |
+| Ninja | `D:\Qt\Qt6.12\Tools\Ninja\ninja.exe` (1.12.1) |
+| MSVC | Visual Studio Community 2026 18.12, MSVC toolset 14.52.37025; `C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvarsall.bat` |
+
+**Known issue on this machine:** the Qt installer registered its kits, Qt versions, CMake
+and MinGW entries with `C:\Qt\Qt6.12\...` paths, but Qt is installed on `D:`. The
+pre-made kit **"Desktop Qt 6.12.0 MSVC2022 64bit"** therefore shows a red error (Qt version
+and CMake not found). Do not use it; set up the pieces once as below.
+
+### One-time setup: Edit → Preferences → Kits
+
+1. **Qt Versions** tab → **Add…** → select
+   `D:\Qt\Qt6.12\6.12.0\msvc2022_64\bin\qmake.exe` → it appears as
+   "Qt 6.12.0 MSVC2022 64bit" under *Manual* → **Apply**.
+2. **Compilers** tab → check *Auto-detected* → **C++** for an entry named
+   "Microsoft Visual C++ Compiler 18.12… (amd64)". Qt Creator finds Visual Studio itself,
+   so normally nothing is needed. If it is missing: **Add → MSVC → C++**, Initialization:
+   `C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvarsall.bat`,
+   argument `amd64` → **Apply**. Repeat for **C** if you like (only C++ is used).
+3. **CMake** tab (in some versions: *Preferences → CMake → Tools*) → **Add** →
+   Path `D:\Qt\Qt6.12\Tools\CMake_64\bin\cmake.exe`, name e.g. "CMake 3.30.5 (Qt, D:)"
+   → **Apply**. The auto-detected "CMake 3.30.5 (Qt)" entry points to the missing `C:`
+   path; ignore it.
+4. **Kits** tab → **Add** → fill in:
+   - Name: `Qt 6.12.0 MSVC 64-bit (D:)`
+   - Compiler C++: the *Microsoft Visual C++ Compiler 18.12… (amd64)* entry from step 2
+     (C: the matching C entry, or leave it)
+   - Qt version: *Qt 6.12.0 MSVC2022 64bit* from step 1
+   - CMake Tool: the entry from step 3
+   - CMake generator: **Ninja**
+   - CMake Configuration → **Change…** → add the line
+     `CMAKE_MAKE_PROGRAM:FILEPATH=D:/Qt/Qt6.12/Tools/Ninja/ninja.exe`
+     (Ninja is not on PATH, so CMake must be told where it is)
+   - Debugger: none is available (see below)
+   → **Apply** / **OK**. The kit must show no red error icon.
+
+### Open, build, run
+
+1. **File → Open File or Project…** → select `<repo>\CMakeLists.txt`.
+2. On the *Configure Project* page tick only the kit **Qt 6.12.0 MSVC 64-bit (D:)** and
+   its **Release** build (Debug is fine too). Qt Creator also lists the CMake presets from
+   `CMakePresets.json` / `CMakeUserPresets.json` (`release`, `debug`, `local-release`)
+   as extra entries; leave those unticked. Click **Configure Project**.
+3. **Build → Build Project** (Ctrl+B), then **Run** (Ctrl+R). Running from Qt Creator
+   needs no deploy step: Qt Creator adds the kit's Qt `bin` folder to the run
+   environment. Command-line options (e.g. `--rate 2000`) go in
+   *Projects → Run → Command line arguments*.
+4. The unit tests appear under **Tools → Tests** (CTest) and can be run from there.
+
+**Debugging:** this machine has no CDB (the "Debugging Tools for Windows" feature of the
+Windows SDK is not installed), so the MSVC kit can build and run but not debug. Installing
+that Windows SDK feature adds `cdb.exe`, which Qt Creator then detects automatically.
 
 ## Demo mode
 

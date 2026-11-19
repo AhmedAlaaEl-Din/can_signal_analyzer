@@ -121,3 +121,19 @@ Findings → changes:
 - **Line endings:** `.gitattributes` normalises text to LF (batch files CRLF).
 - The shell wrapper used during the session mis-parsed apostrophes inside heredocs; files
   were written with the editor tool instead (no impact on the project).
+
+## Run script and Qt Creator (follow-up)
+- **`scripts/run.ps1`** builds (local-release, else release + `QT_ROOT`), deploys and starts
+  the app. It loads `vcvars64.bat` into its own process only and prefers the CMake/Ninja
+  shipped with Qt over the copies Visual Studio puts on PATH, so a build folder is never
+  configured by two different CMake versions. No machine paths are stored in the script.
+- **QML module output moved from `<build>/qml` to `<build>/qmlmodules`:** the `deploy`
+  target (windeployqt) copies Qt's own QML modules into `<build>/qml`. Sharing that folder
+  made the next configure scan half-deployed Qt files ("Cannot open input file …").
+  The project's modules are compiled into the exe, so their output folder only matters
+  to tooling.
+- **Qt Creator 21 setup documented in the README** after checking this machine: the
+  installer-registered kits/Qt versions/CMake point to a non-existent `C:\Qt\Qt6.12`, so the
+  README describes a manual kit (Qt version, auto-detected VS 2026 compiler, Qt's CMake,
+  Ninja via `CMAKE_MAKE_PROGRAM`). CDB is not installed, so debugging with the MSVC kit is
+  not available until the Windows SDK debugging tools are added.

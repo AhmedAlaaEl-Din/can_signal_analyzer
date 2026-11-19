@@ -14,7 +14,8 @@ qt_standard_project_setup(REQUIRES 6.5)
 qt_policy(SET QTP0004 NEW)
 
 # All QML modules land in one tree whose layout matches their URIs (tooling friendly).
-set(QT_QML_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/qml)
+# Not "qml": windeployqt (deploy target) copies Qt's own QML modules into <build>/qml.
+set(QT_QML_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/qmlmodules)
 
 # Shared warning settings for every target in the project.
 add_library(can_warnings INTERFACE)

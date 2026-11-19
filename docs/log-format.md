@@ -2,7 +2,8 @@
 
 `.canlog` is the native log format of CAN Analyzer. Design goals:
 
-- **Compact**: about 12 bytes per classic CAN frame with 8 data bytes.
+- **Compact**: 14 bytes for a classic CAN frame with 8 data bytes, 13.2 bytes on average
+  for the demo traffic (12.6 MiB for 1,000,000 frames).
 - **Streaming and crash-safe**: the writer appends self-contained blocks. If
   the writer stops abruptly (crash, power loss), every complete block can
   still be read, and the reader reports how many bytes it ignored at the end.
@@ -80,7 +81,7 @@ Rules:
 The absolute timestamp of a frame is the block's `first timestamp` plus the
 sum of the Δt values up to and including the frame. A typical 8-byte
 standard frame at 1000 frames/s takes 1 + 1 + 1 + 1 + 2 + 8 = 14 bytes; in
-the mixed demo traffic the average is about 12 bytes per frame.
+the mixed demo traffic (some 2–4 byte frames) the average is 13.2 bytes per frame.
 
 ## Reading and seeking
 

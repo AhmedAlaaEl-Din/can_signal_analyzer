@@ -23,6 +23,7 @@ get_filename_component(LOGTOOL_NAME "${LOGTOOL}" NAME)
 execute_process(
     COMMAND "${WINDEPLOYQT}" --release --qmldir "${SOURCE_DIR}/src/app" --no-translations
             --no-system-d3d-compiler --no-opengl-sw --no-compiler-runtime
+            --skip-plugin-types qmltooling
             "${STAGE}/${EXE_NAME}"
     RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
 if(NOT rc EQUAL 0)
@@ -30,7 +31,15 @@ if(NOT rc EQUAL 0)
 endif()
 # The console tool needs Qt Core only (already deployed for the app).
 
-# 3. Visual C++ runtime, application-local.
+# 3. Visual C++ runtime, application-local. CMake's list can be empty for a
+#    toolset newer than CMake itself; then use the redist folder that the
+#    Visual Studio developer environment (vcvars) points to.
+if(NOT RUNTIME_LIBS AND DEFINED ENV{VCToolsRedistDir})
+    file(GLOB RUNTIME_LIBS "$ENV{VCToolsRedistDir}/x64/Microsoft.VC*.CRT/*.dll")
+endif()
+if(NOT RUNTIME_LIBS)
+    message(WARNING "The Visual C++ runtime DLLs were not found; the package needs the VC++ Redistributable.")
+endif()
 foreach(lib IN LISTS RUNTIME_LIBS)
     if(EXISTS "${lib}")
         file(COPY "${lib}" DESTINATION "${STAGE}")

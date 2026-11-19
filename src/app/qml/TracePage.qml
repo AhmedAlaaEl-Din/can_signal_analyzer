@@ -442,6 +442,7 @@ Item {
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: Theme.space.lg
                 detached: !list.follow && list.count > 0
+                detachedText: Session.replayMode ? qsTr("Follow playback") : qsTr("Jump to live")
                 onJumpRequested: page.jumpToLive()
             }
         }

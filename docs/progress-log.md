@@ -1,5 +1,90 @@
 # Progress log
 
+## Summary (Phase 4, unattended run, 2026-11-19 12:43 → 15:17)
+
+**Done** (branch `phase4-release`, from `phase3-plots`; local tag `v1.0.0`; nothing pushed or merged)
+- **Logging**: `.canlog` format (versioned header with start time and channel JSON, CRC-checked
+  blocks of frames with relative timestamps, about 13 bytes per frame), documented in
+  `docs/log-format.md`. Recorder on its own thread, a block every 250 ms (crash-safe: a
+  truncated file reads up to the last complete block). Record/Stop in the toolbar, REC chip
+  with duration and size in the toolbar and status bar, date-named file in a save dialog.
+  CSV export and import of frames (documented columns, line-numbered errors).
+- **Replay** through the same pipeline: play/pause, 0.25×–8× and Max, loop, seek bar with
+  time preview, jump to start/end, single-frame step, 10 s pre-roll after seeks; rate and bus
+  load scaled to the recorded bus. Index = block headers: 1,000,000 frames open in 13 ms,
+  seek 27 µs average, 11 MiB peak memory.
+- **Markers**: named markers at the replay time, on the seek bar and as lines under the plot
+  lanes, jump with `[` `]`, stored in a JSON sidecar next to the log.
+- **Trace search**: ID / message name, data pattern with `??` wildcards, signal conditions
+  (`VehicleSpeed > 100`, value-table text); interpretation chip, highlighted matches,
+  F3 / Shift+F3.
+- **Log summary dialog**: duration, frames, first/last timestamp, average and peak bus load,
+  per-ID count/share/rate/period (mean, min, max)/DLC/load, CSV export.
+- **Polish**: follow-live chip docked under the value axis (never over a lane); step signals
+  as clean step lines without band (fuzzy-line bug fixed); quantisation hint instead of
+  smoothing; welcome screen with one-click demo (database + four lanes + simulator + Plots);
+  settings persisted (theme, window, tab, database, plot layout, filters; missing database
+  handled); About dialog (version, build, Qt version, LGPLv3 notice and links).
+- **Release**: version in one place (CMake) → `version.h`, exe version resource, About, zip
+  name; own SVG app icon rendered to `.ico` at build time; `package_zip` target →
+  `dist/CANSignalAnalyzer-1.0.0-win64.zip` (35.4 MiB) with exe, Qt runtime, MSVC runtime,
+  demo DBC, 60 s sample log, README, LICENSE (MIT), THIRD_PARTY (Qt LGPLv3/GPLv3 texts,
+  source location, how to replace Qt). No debug files. Verified from a clean copy with no
+  Qt on PATH (`--smoke-test`: exit 0, 23,248 frames replayed). `can_logtool` for sample
+  generation, info, CSV and the benchmark.
+- **Tests**: 17 suites via CTest, all passing, 242 checks (new: `tst_canlog` 16,
+  `tst_replay` 19, `tst_framesearch` 9, `tst_plotmodel` +1). Clean rebuild: **0 warnings**.
+- **Demo capture**: deterministic 60 s showcase, 721 JPEG frames at 12 fps (window only,
+  1280 × 800, quality 80), 8 PNG screenshots, `frames.zip` 52.6 MiB.
+- **Design review**: 3 rounds on the screenshots (decisions.md); final capture after round 3.
+- **Docs**: README rewritten as the project page, `docs/case-study.md`,
+  `docs/phase4-explained.md`, `docs/log-format.md`, `docs/building.md` (build details moved
+  out of the README), decisions, needs-me.
+- **Scan** (tracked files and every file in the release zip, including strings in the
+  executables): no machine paths, names, e-mails, secrets or employer names. Remaining hits
+  are Qt's own data (locale/timezone names, a PC vendor table) and not from this project.
+
+**Blocked**: nothing.
+
+**Needs me** (`docs/needs-me.md` 15–22): review the branch and tag; assemble the video;
+confirm the MIT license / copyright holder; decide on a Qt source offer for public binary
+releases; no installer (no installer tool available); try the native dialogs and
+drag-and-drop by hand once; optional README screenshots; settings registry key.
+
+**Where things are**
+- Release zip: `dist/CANSignalAnalyzer-1.0.0-win64.zip` (35.4 MiB, git-ignored)
+- Hand-off copies (folder outside the repo, path given in the chat): `frames.zip` (52.6 MiB),
+  `screenshots/01-welcome-dark.png` … `08-about-light.png`
+- In the repo (git-ignored): `evidence/frames/frame_0000.jpg` … `frame_0720.jpg`,
+  `evidence/frames.zip`, `evidence/screenshots/`, `evidence/checks/` (minimum-size and edge
+  cases), `evidence/log-bench.txt`, `evidence/demo_recording.canlog`
+
+**How to build and run**
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run.ps1                 # build, deploy, start
+cmake --build --preset local-release --target package_zip               # release zip in dist\
+build\local-release\can_analyzer.exe --demo --rate 1000                 # re-capture the showcase
+powershell -ExecutionPolicy Bypass -File tools\zip-frames.ps1           # zip the frames
+build\local-release\can_logtool.exe bench --report evidence\log-bench.txt
+```
+Release: unzip, start `can_analyzer.exe`, click **Start with the demo**; open
+`samples\demo_drive_60s.canlog` for replay.
+
+**Risks / known limitations**
+- The native file dialogs and drag-and-drop were not operated by hand (unattended); the
+  same code paths were exercised programmatically (record, open, export, summary CSV).
+- License and LGPL source-offer wording need the owner's confirmation (needs-me 17–18).
+- The MSVC runtime is copied from the developer environment's redist folder because CMake
+  3.30 does not know the VS 18 toolset; building the package outside a VS developer
+  environment would warn and omit it.
+- Replay "Max" speed is a fixed 4000 frames per tick, not adaptive.
+- CSV import requires rows in time order (reported with the line number).
+- Plots in replay show an empty region before the start of the log when the window is
+  longer than the elapsed log time (the view does not clamp at the log start).
+- No installer; the app stores settings in the registry (`HKCU\Software\CanAnalyzer`).
+
+---
+
 ## Summary (Phase 3, unattended run, 2026-11-19 10:50 → 11:45)
 
 **Done** (branch `phase3-plots`, from `phase2-decoding`; not pushed, not merged)
@@ -245,3 +330,13 @@ powershell -ExecutionPolicy Bypass -File tools\zip-frames.ps1
 | 2026-11-19 11:30 | Design review round 3: demo mode ignores the real mouse, threshold badges, cursor/tooltip bindings, axis smoothing fix. |
 | 2026-11-19 11:37 | Final capture (541 frames, zip 40.6 MB), clean rebuild 0 warnings, 14/14 suites. Committed. |
 | 2026-11-19 11:45 | Export check, docs (README, phase3-explained, decisions), scan clean, summary. |
+| 2026-11-19 12:43 | Phase 4 started: branch `phase4-release` from `phase3-plots`. |
+| 2026-11-19 13:01 | Core: .canlog writer/reader with index, recorder, replay source, markers, search, summary, CSV; 3 new test suites (17/17 pass). Committed. |
+| 2026-11-19 14:53 | App: record/replay/search/summary/About UI, welcome screen, settings, icon, version resource, packaging target, can_logtool; builds with 0 warnings. |
+| 2026-11-19 14:58 | First 60 s capture; design review round 1 (toolbar overflow, fuzzy step line, chip labels, F3 start, replay bus load). |
+| 2026-11-19 15:00 | App layer committed. |
+| 2026-11-19 15:02 | Round 2 (incomplete-condition error, data chip text, status bar at min size, replay pill); CSV export 28 s → 0.27 s; 1M-frame benchmark. |
+| 2026-11-19 15:05 | Release zip built; MSVC runtime and qmltooling fixes; clean-copy smoke test passed without Qt on PATH. |
+| 2026-11-19 15:08 | Round 3 (markers under lanes, Follow label); final layout check + capture (721 frames, zip 52.6 MiB); handoff copies. |
+| 2026-11-19 15:12 | Settings round trip and missing-database test (registry cleaned up afterwards). |
+| 2026-11-19 15:17 | Clean rebuild 0 warnings, 17/17 suites, final package, scan clean, docs, tag v1.0.0. |

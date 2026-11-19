@@ -268,12 +268,12 @@ Item {
 
                 ToolButton {
                     iconName: "live"
-                    text: qsTr("Live")
+                    text: Session.replayMode ? qsTr("Follow") : qsTr("Live")
                     checkable: true
                     checked: Session.plot.followLive
                     onClicked: Session.plot.follow()
                     ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Follow the newest data  (F)")
+                    ToolTip.text: Session.replayMode ? qsTr("Follow the replay position  (F)") : qsTr("Follow the newest data  (F)")
                     ToolTip.delay: 600
                 }
                 SegmentedToggle {
@@ -386,6 +386,52 @@ Item {
                 elevation: 1
                 readonly property real timeAxisHeight: 30
 
+                // Replay markers sit under the lanes: the lanes are transparent,
+                // so the lines show through, but legend chips stay readable on top.
+                Item {
+                    id: markerLayer
+                    x: page.axisWidth + 1
+                    y: 1
+                    width: page.plotWidth
+                    height: lanesArea.height
+                    visible: lanes.count > 0
+                    // Replay markers: thin vertical lines with the marker name.
+                    Repeater {
+                        model: Session.replayMode ? Session.markers : null
+                        Item {
+                            id: mark
+                            required property var timeUs
+                            required property string name
+                            x: (Session.plot.viewStartUs, Session.plot.viewEndUs, Session.plot.xOfTime(timeUs, page.plotWidth))
+                            width: 1
+                            height: parent.height
+                            visible: x >= 0 && x <= page.plotWidth
+                            Rectangle {
+                                width: 1.5
+                                height: parent.height
+                                color: Theme.alpha(Theme.warning, 0.85)
+                            }
+                            Rectangle {
+                                x: 0
+                                y: parent.height - height - 4
+                                width: markText.implicitWidth + 10
+                                height: 18
+                                radius: 4
+                                color: Theme.warning
+                                Text {
+                                    id: markText
+                                    anchors.centerIn: parent
+                                    text: mark.name
+                                    color: Theme.dark ? "#1A1300" : "#FFFFFF"
+                                    font.family: Theme.fontSans
+                                    font.pixelSize: Theme.type.caption
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Lanes plus zoom / pan / hover handling over the plot region.
                 Item {
                     id: lanesArea
@@ -497,42 +543,6 @@ Item {
                     width: page.plotWidth
                     height: lanesArea.height
                     visible: lanes.count > 0
-
-                    // Replay markers: thin vertical lines with the marker name.
-                    Repeater {
-                        model: Session.replayMode ? Session.markers : null
-                        Item {
-                            id: mark
-                            required property var timeUs
-                            required property string name
-                            x: (Session.plot.viewStartUs, Session.plot.viewEndUs, Session.plot.xOfTime(timeUs, page.plotWidth))
-                            width: 1
-                            height: parent.height
-                            visible: x >= 0 && x <= page.plotWidth
-                            Rectangle {
-                                width: 1.5
-                                height: parent.height
-                                color: Theme.alpha(Theme.warning, 0.85)
-                            }
-                            Rectangle {
-                                x: 0
-                                y: parent.height - height - 4
-                                width: markText.implicitWidth + 10
-                                height: 18
-                                radius: 4
-                                color: Theme.warning
-                                Text {
-                                    id: markText
-                                    anchors.centerIn: parent
-                                    text: mark.name
-                                    color: Theme.dark ? "#1A1300" : "#FFFFFF"
-                                    font.family: Theme.fontSans
-                                    font.pixelSize: Theme.type.caption
-                                    font.weight: Font.DemiBold
-                                }
-                            }
-                        }
-                    }
 
                     // Crosshair
                     Rectangle {

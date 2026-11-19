@@ -70,6 +70,7 @@ Rectangle {
         Item { Layout.fillWidth: true }
 
         Text {
+            visible: bar.width > 1040
             text: Session.sourceDescription
             color: Theme.textFaint
             font.family: Theme.fontSans
@@ -77,8 +78,9 @@ Rectangle {
             elide: Text.ElideRight
             Layout.maximumWidth: 260
         }
-        Divider { vertical: true; Layout.preferredHeight: 14; Layout.leftMargin: Theme.space.xs; Layout.rightMargin: Theme.space.xs }
+        Divider { visible: bar.width > 1040; vertical: true; Layout.preferredHeight: 14; Layout.leftMargin: Theme.space.xs; Layout.rightMargin: Theme.space.xs }
         Row {
+            visible: bar.width > 1040
             spacing: Theme.space.xs
             Kbd { text: "F5" }
             Text { text: qsTr("run"); color: Theme.textFaint; font.pixelSize: Theme.type.small; font.family: Theme.fontSans; anchors.verticalCenter: parent.verticalCenter }

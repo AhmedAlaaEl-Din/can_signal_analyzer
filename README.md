@@ -1,385 +1,237 @@
 # CAN Analyzer
 
-A Windows desktop app that shows CAN bus traffic live, like the trace view of a
-professional bus tool. C++20 core, Qt 6 Quick/QML front end, custom design system.
+▶ **[Watch the 1-minute demo video on YouTube](https://youtu.be/ILNY42n71yI)**
 
-There is **no hardware** in this project: frames come from a built-in, seeded simulator.
-Phase 2 adds a signal database: load a DBC file (or the bundled, invented
-`demo_vehicle.dbc`) and frames are decoded into named signals with physical values, units
-and value-table text. Phase 3 adds live signal plots: stacked lanes on one time axis, zoom
-and pan, cursors with deltas, thresholds and export. Later phases add logging and replay.
+**A Windows desktop tool for watching, decoding, recording and replaying CAN bus traffic.**
+CAN Analyzer streams thousands of frames per second into a live trace, decodes them with a
+DBC signal database, plots any signal over time in stacked, synchronised lanes, records
+everything to a compact, crash-safe log format and replays logs through the same views
+with markers, search and per-ID statistics. It is written in C++20 with a Qt 6 Quick/QML
+front end and its own design system. There is no hardware in this project: the bus is a
+built-in, deterministic vehicle simulator, so everything can be tried right away.
 
-## Screenshots
-
-Captured by the app itself in `--demo` mode (application window only, 1280×800 at 125 %
-display scaling, 2000 simulated frames/s).
-
-| | |
-|---|---|
-| ![Live trace, dark theme](docs/img/trace-dark.png) | ![Live trace, light theme](docs/img/trace-light.png) |
-| **Trace, dark**: live stream following the newest frame | **Trace, light**: same view in the light theme |
-| ![Trace filtered by ID and paused](docs/img/trace-filtered-paused.png) | ![Messages overview, dark theme](docs/img/messages-dark.png) |
-| **Filtered and paused**: ID filter `123, 1A4`, selected row, frames held while paused | **Messages, dark**: one row per ID, sorted by count, changed bytes highlighted |
-
-![Messages overview, light theme](docs/img/messages-light.png)
-
-**Messages, light**: the same overview in the light theme.
-
-**Phase 2 (signal database):** screenshots are produced by `--demo` in
-`evidence/screenshots/` (`01-trace-decoded-dark` … `06-signal-detail-light`).
-
-| | |
-|---|---|
-| ![Signals tab, dark theme](docs/img/signals-dark.png) | ![Signal detail with bit layout, dark theme](docs/img/signal-detail-dark.png) |
-| **Signals**: grouped by message, live values, 10 s sparklines, pinned signals on top | **Signal detail**: live value and chart, bit layout of the 8 data bytes (MSB solid, LSB outlined), definition |
-
-**Phase 3 (plots):** `--demo` now records the Plots tab
-(`evidence/screenshots/01-plots-live-dark` … `06-plots-tooltip-light`).
+<!-- Screenshot placeholders for version 1.0. Copy the PNGs you like from
+     evidence/screenshots/ (created by `can_analyzer --demo`) to docs/img/ and un-comment:
+![Plots with four lanes](docs/img/plots-four-lanes-dark.png)
+![Replay with markers](docs/img/replay-markers-dark.png)
+![Trace search](docs/img/search-trace-dark.png)
+![Log summary](docs/img/log-summary-dark.png)
+![Replay, light theme](docs/img/replay-light.png)
+-->
 
 | | |
 |---|---|
 | ![Plots with cursors A/B and crosshair tooltip, dark theme](docs/img/plots-cursors-dark.png) | ![Plots with crosshair tooltip and threshold badge, light theme](docs/img/plots-tooltip-light.png) |
-| **Plots**: stacked lanes on one time axis, per-unit left/right axes, cursors A/B with Δt, frequency and per-signal deltas | **Plots, light theme**: crosshair tooltip with every visible value, dashed second series, threshold badge, gear as a step plot |
-
-Demo video: _link to be added_
+| **Plots**: stacked lanes on one time axis, per-unit axes, cursors with Δt and value deltas | **Light theme**: crosshair tooltip, dashed second series, threshold, gear as a step plot |
+| ![Signals tab, dark theme](docs/img/signals-dark.png) | ![Signal detail with bit layout, dark theme](docs/img/signal-detail-dark.png) |
+| **Signals**: grouped by message, live values, sparklines, pinned signals | **Signal detail**: live chart, bit layout of the 8 data bytes, definition |
+| ![Live trace, dark theme](docs/img/trace-dark.png) | ![Messages overview, dark theme](docs/img/messages-dark.png) |
+| **Trace**: every frame, decoded on demand, filters, pause without loss | **Messages**: one row per ID with rate, period and last data |
 
 ## Features
 
-- **Live trace**: time, channel, ID, per-ID Δt, DLC and hex data; follows the live end and
-  stops following as soon as you scroll up ("Jump to live" brings it back, or press End).
-- **Messages overview**: one row per ID with count, measured period, last-seen time and the
-  latest payload; changed bytes flash briefly; sortable by any column.
-- **Filtering**: IDs (single, list or range, e.g. `123, 1A0-1AF`), data length (`8`, `0-4`)
-  and frame format (standard/extended). Invalid input shows a friendly inline message and
-  keeps the last valid filter.
-- **Pause / resume** that freezes the view but keeps capturing; nothing is lost.
-- **Statistics**: frames/s, estimated bus load at 500 kbit/s, total frames, buffer fill.
-- **Simulator**: "Demo vehicle" (the messages of `demo_vehicle.dbc`) or "Raw patterns"
-  (12 invented IDs with counters, sines, random walks, bit flags, variable DLC, optional
-  bursts); adjustable total rate up to 2000 fr/s; fully deterministic for a given seed.
-- **Performance**: 100,000-frame ring buffer, 30 ms batched model updates; about 50 rendered
-  frames/s at 2000 bus frames/s while capturing demo PNGs.
-- **Signal database (DBC)**: own parser for the common DBC subset, with clear, line-numbered
-  error messages for broken files. Load the bundled demo database with one click or open any
-  `.dbc` file; unload at any time.
-- **Decoding**: Intel and Motorola byte order, signed/unsigned, factor/offset, min/max range
-  checks, value tables, simple multiplexing, standard and extended IDs.
-- **Names or hex**: Trace and Messages show message names (or raw IDs, Ctrl+N); the selected
-  trace frame and expanded Messages rows show their decoded signals.
-- **Signals tab**: every signal grouped by message with live physical value, unit,
-  enumeration text, a 10 s sparkline and min/max seen; search, collapse, pin to the top.
-- **Signal detail**: live value and chart, start bit, length, byte order, scaling, range,
-  sender/receivers, comment, value table and a **bit layout** of the 8 data bytes showing which
-  bits the signal occupies (MSB/LSB marked, live bit values).
-- **Demo vehicle**: the simulator can drive the demo database with plausible physics (speed
-  ramps, rpm follows speed and gear, torque follows throttle and the torque curve, slow
-  coolant warm-up, steering sweep, brake events); the phase 1 random patterns remain
-  available as "Raw patterns".
-- **Live plots** (Plots tab): stacked lanes sharing one time axis, several signals per lane,
-  per-unit left/right axes, a colour-blind-safe palette with a dash pattern as second cue,
-  soft gradient fill, faint grid, step plots with state labels for enumerations.
-  - Add signals with **+**, by **drag and drop** from the picker, or with **Plot** in the
-    Signals tab / detail panel; remove, reorder and resize lanes.
-  - **Follow live** with 5/10/30/60 s windows; mouse-wheel zoom, drag to pan, double-click
-    to reset; Y autoscale per lane with a lock.
-  - **Crosshair** tooltip with every visible value; **cursors A/B** with Δt, frequency and
-    value deltas; draggable **threshold** lines.
-  - **Min/max band** when zoomed out (decimation never loses a spike); 10 minutes of history.
-  - Pause freezes the view without losing data; **PNG** and **CSV** export.
-- **Design**: dark and light themes with an animated switch, custom-styled controls,
-  hand-drawn icons, WCAG AA contrast, keyboard shortcuts, empty states.
+- **Live trace**: timestamp, channel, ID or message name, Δt per ID, DLC and data;
+  100,000-frame ring buffer; filters by ID list/range, DLC and frame format; pause freezes
+  the view while capture continues; a selected row expands into its decoded signals.
+- **Messages overview**: one row per ID with count, rate, measured period and changed-byte
+  highlighting; multiplexed messages expand per page.
+- **DBC decoding**: own parser for the common DBC subset (Intel and Motorola byte order,
+  signed values, factor/offset, value tables, simple multiplexing), with line-numbered
+  error messages; the bundled `demo_vehicle.dbc` loads with one click.
+- **Signal list**: every signal with its live value, unit, a 10 s sparkline and pinning;
+  a detail panel with the bit layout of the message.
+- **Multi-lane plots**: stacked lanes sharing one time axis, several signals per lane,
+  left/right axes per unit, colour-blind-safe palette plus a dash pattern, step plots with
+  state names for enumerations, follow live (5–60 s), zoom, pan, cursors A/B with Δt,
+  frequency and value deltas, draggable thresholds, crosshair tooltip, min/max band so a
+  spike is never lost, PNG and CSV export.
+- **Logging**: Record writes everything the bus delivers to a `.canlog` file on a background
+  thread, flushed every 250 ms, so an abrupt stop loses at most a quarter of a second.
+  A REC chip shows the duration and file size.
+- **Replay**: logs play through the same trace, messages, signals and plots: play/pause,
+  0.25×–8× or as fast as possible, loop, seek bar with a time preview, jump to start/end,
+  single-frame steps. Seeking is instant even in a 1,000,000-frame log.
+- **Markers**: named markers at the current replay time, shown on the seek bar and as lines
+  in the plots, with jumps between them; saved next to the log.
+- **Search**: find frames in the trace by ID or message name, by data pattern with wildcard
+  bytes (`12 ?? FF`) or by signal condition (`VehicleSpeed > 100`, `GearLever = D`);
+  matches are highlighted, F3 / Shift+F3 jump between them.
+- **Log summary**: duration, frame count, first/last timestamp, average and peak bus load,
+  and per-ID count, share, rate, period (mean, min, max), DLC and load, exportable as CSV.
+- **Export and import**: frames as CSV (documented columns), CSV files open like logs.
+- **Comfort**: welcome screen with a one-click demo, dark and light themes, settings
+  remembered between runs (theme, window, tab, database, plot layout, filters), drag and
+  drop of logs and DBC files, keyboard shortcuts for everything frequent, About dialog with
+  version, build and license information.
 
 ### Keyboard shortcuts
 
 | Key | Action |
 |---|---|
 | F5 | Start / stop the simulator |
-| Space or F6 | Pause / resume the view |
-| Ctrl+L | Clear trace and statistics |
-| Ctrl+F | Focus the ID filter (Signals tab: the search box) |
-| Esc | Leave a filter field / reset the filter |
-| End | Jump to the live end of the trace |
-| Ctrl+1 … Ctrl+4 | Trace / Messages / Signals / Plots tab |
+| Space | Pause the view (live) / play–pause (replay) |
+| Ctrl+R | Start / stop recording |
+| Ctrl+Shift+O | Open a log for replay |
+| . | Replay: step one frame |
+| M, [, ] | Replay: add a marker, previous / next marker |
+| Ctrl+Home / Ctrl+End | Replay: jump to start / end |
+| Ctrl+F, F3, Shift+F3 | Trace: find, next / previous match |
+| Ctrl+1 … Ctrl+4 | Trace / Messages / Signals / Plots |
 | F / + / − / 0 | Plots: follow live / zoom in / zoom out / reset view |
 | C / Esc | Plots: place measurement cursors / clear them |
-| Ctrl+O | Open a DBC file |
-| Ctrl+N | Toggle message names / hex IDs |
-| Ctrl+T | Toggle dark / light theme |
+| Ctrl+O, Ctrl+N, Ctrl+T, Ctrl+L, F1 | Open DBC, names/hex, theme, clear, About |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    subgraph worker["Simulator thread"]
-        E["SimulatorEngine<br/>(seeded, deterministic)"] --> W["SimWorker<br/>10 ms precise timer"]
-        VM["VehicleModel<br/>(demo vehicle physics)"] --> E
+    subgraph sources["Frame sources (same interface)"]
+        SIM["SimulatedSource<br/>worker thread, seeded<br/>VehicleModel physics"]
+        REP["ReplaySource<br/>indexed .canlog reader<br/>speed, seek, pre-roll"]
     end
-    DBC[("demo_vehicle.dbc<br/>or user .dbc")] --> P["DbcParser"] --> DB["Database<br/>(immutable, shared)"]
-    DB --> VM
-    W -- "framesReady(batch)<br/>queued signal" --> S
+    SIM -- "framesReady(batch)" --> S
+    REP -- "framesReady(batch)" --> S
     subgraph gui["GUI thread"]
-        S["CaptureSession<br/>collects + flushes every 30 ms"]
-        S --> ST["BusStatistics"]
-        S --> FM["FrameModel<br/>ring buffer 100k + filter"]
+        S["CaptureSession<br/>batches every 30 ms"]
+        S --> FM["FrameModel<br/>ring buffer + filter + search"]
         S --> MO["MessageOverviewModel"]
-        S --> SL["SignalListModel<br/>live values + sparklines"]
-        DB --> D["Decoder<br/>(signal codec)"]
-        D --> FM
-        D --> MO
-        D --> SL
-        SL --> TS["TimeSeriesStore<br/>ring per signal, 10 min,<br/>min/max decimation"]
-        TS --> PC["PlotController<br/>time axis, follow live,<br/>cursors, CSV"]
-        TS --> PE["PlotCanvas<br/>scene-graph plot engine"]
-        PM["PlotModel<br/>lanes x signals"] --> PE
-        PC --> PE
-        FM --> QT["Trace"]
-        MO --> QM["Messages"]
-        SL --> QS["Signals"]
-        PE --> QP["Plots"]
+        S --> SL["SignalListModel<br/>decoder"]
+        SL --> TS["TimeSeriesStore<br/>min/max decimation"]
+        TS --> PE["PlotCanvas<br/>scene-graph engine"]
+        S --> MK["MarkerStore<br/>JSON sidecar"]
     end
+    S -- "batches" --> REC["LogRecorder<br/>writer thread, 250 ms blocks"]
+    REC --> LOG[(".canlog")]
+    LOG --> REP
+    DBC[("DBC file")] --> DB["Database"] --> SL
+    FM --> QT["Trace"]
+    MO --> QM["Messages"]
+    SL --> QS["Signals"]
+    PE --> QP["Plots"]
 ```
 
-- `src/core/` — **no Qt Quick dependency** (Qt Core only): `CanFrame`, `RingBuffer`,
-  `FrameSource` / `SimulatedSource` / `SimulatorEngine` / `VehicleModel`, `FrameFilter`,
-  `BusStatistics`, `FrameModel`, `MessageOverviewModel`, `CaptureSession`, and for phase 2
-  `DbcParser` / `Database` (`dbc.*`), the signal codec and `Decoder` (`signalcodec.*`),
-  `SignalDatabase` and `SignalListModel`, and for phase 3 `TimeSeriesStore`, `plotmath`,
-  `PlotModel` and `PlotController`. The demo database is a resource of this library.
-- `src/app/plotcanvas.*` — the scene-graph plot engine (C++ `QQuickItem`).
-- `bench/` — optional Qt Charts comparison benchmark (`can_charts_bench`).
-- `src/app/ui/` — module `CanUi`: the `Theme` token singleton, icons and components.
-- `src/app/style/` — module `CanStyle`: the custom Qt Quick Controls style.
-- `src/app/qml/` — module `CanAnalyzer`: the screens.
-- `tests/` — Qt Test suites run by CTest.
-- `docs/` — design system, decisions, progress log, plain-English explainer.
+- `src/core/`: the engine, with no Qt Quick dependency (Qt Core only). It holds frames,
+  sources, the simulator, the DBC parser and the one signal codec used by the decoder, the
+  simulator and the bit-layout view. It also holds the models, the time-series store, plot
+  maths, the log format (`canlog.*`), the recorder, replay, markers, search and the log
+  summary.
+- `src/app/`: QML screens, the scene-graph plot engine `PlotCanvas`, the design system
+  (`ui/`, module `CanUi`) and the custom Controls style (`style/`, module `CanStyle`).
+- `tools/`: `can_logtool` (generate the sample log, inspect, convert, benchmark) and the
+  build-time icon renderer.
+- `tests/`: 17 Qt Test suites run by CTest. `bench/`: the optional Qt Charts comparison.
+- `docs/`: decisions, the log format, explainers for each phase, a case study.
 
-## Plot performance
+## Performance
 
-Measured on the development machine (Windows 11, Direct3D 11, 1280 × 800 window at 125 %
-scaling, 4× MSAA): 8 signals at 1000 Hz each (≈ the decoded output of 2000 frames/s), 10 s
-window = **10,000 visible points per signal**, 4 lanes.
+Measured on the development machine (Windows 11, Direct3D 11, 1280 × 800 at 125 %).
+
+**Plots**: 8 signals at 1000 Hz, 10 s window = 10,000 visible points per signal, 4 lanes:
 
 | Engine | fps | p95 frame time |
 |---|---|---|
-| **PlotCanvas** (custom scene graph, min/max decimation — used by the app) | **60.0** (vsync) | 17.8 ms |
+| **PlotCanvas** (custom scene graph, min/max decimation, used by the app) | **60.0** (vsync) | 17.8 ms |
 | PlotCanvas drawing all 80,000 raw points | 51.5 | 32.0 ms |
-| Qt Charts, `useOpenGL: true` | 36.2 | 36.2 ms |
+| Qt Charts, OpenGL | 36.2 | 36.2 ms |
 | Qt Charts, raster | 2.7 | 439 ms |
 
-Reproduce: `can_analyzer --plot-bench result.txt` and `can_charts_bench result.txt`.
-Qt Graphs was not installed on the development machine, so it is not part of the
-comparison. Decimation of 8 × 60,000 samples (10 minutes at 100 Hz) to 1200 pixel columns
-takes about 3 ms per frame.
+Decimating 8 × 60,000 samples (10 minutes at 100 Hz) to 1200 pixel columns takes about 3 ms.
 
-## Signal databases
+**Large logs**: 1,000,000 frames of demo traffic (`can_logtool bench`):
 
-**Load:** on the right of the tab row, *Load demo database* loads the bundled
-`demo_vehicle.dbc`; *Open DBC…* (Ctrl+O) opens any file. The pill shows the loaded file and
-its message/signal counts; the × unloads it. If a file cannot be loaded, a banner lists the
-problems with line numbers (for example `Line 5: SG_ Mode: start bit 70 is out of range
-(0-63)`) and the previously loaded database stays active.
-
-**Supported DBC subset**
-
-| Keyword | Supported |
+| | |
 |---|---|
-| `BO_` | messages: ID (standard, or extended via bit 31), name, DLC 0–8, sender |
-| `SG_` | start bit, length 1–64, Intel (`@1`) / Motorola (`@0`), signed (`-`) / unsigned (`+`), factor, offset, min, max, unit, receivers |
-| `SG_ … M` / `mN` | simple multiplexing (one multiplexor per message) |
-| `VAL_` | value tables (enumerations) for signals |
-| `CM_` | comments: global, message, signal (may span lines) |
-| `BA_ "GenMsgCycleTime"` | message period |
-| `VERSION`, `NS_`, `BS_`, `BU_`, other `BA_*`, `VAL_TABLE_`, … | recognised and ignored |
+| File size | 12.6 MiB (13.2 bytes per frame) |
+| Index | 2000 block headers, 94 KiB in memory |
+| Open + index | 13 ms |
+| Random seek (1000 seeks) | 27 µs average, 70 µs worst |
+| Sequential read of all frames | 42 ms |
+| CSV export | 0.27 s (39.7 MiB) |
+| Process memory during all of the above | 11 MiB peak working set |
 
-**Not supported (known limitations):** CAN FD (DLC > 8 is reported as an error), extended
-multiplexing (`m1M`, `SG_MUL_VAL_`), IEEE float/double signals (`SIG_VALTYPE_`), named value
-tables (`VAL_TABLE_` references), signal groups and environment variables. A file with any
-error is rejected as a whole; warnings (e.g. a comment for an unknown signal) do not block
-loading.
+**Live**: 2000 frames/s from the simulator with 30 ms batched updates; the trace keeps
+about 50 rendered frames per second while the demo capture grabs every frame.
 
-## Building
+Reproduce: `can_analyzer --plot-bench result.txt`, `can_charts_bench result.txt`,
+`can_logtool bench --report result.txt`.
 
-Requirements: Qt 6.5+ (developed with Qt 6.12.0, MSVC 2022 64-bit kit), CMake ≥ 3.25,
-Ninja, and a C++20 compiler (MSVC from Visual Studio 2022 or newer, or the MinGW kit that
-ships with Qt).
+## Run the release zip
 
-Machine-specific paths are never committed. `CMakePresets.json` reads the Qt kit from the
-**`QT_ROOT`** environment variable; your own paths go in a git-ignored
-`CMakeUserPresets.json`.
+1. Unzip `CANSignalAnalyzer-1.0.0-win64.zip` anywhere (no installation, no admin rights;
+   the Qt and Visual C++ runtimes are inside).
+2. Start `can_analyzer.exe` and click **Start with the demo**.
+3. Open `samples\demo_drive_60s.canlog` (Ctrl+Shift+O, or drag it onto the window) to try
+   replay, markers, search and the summary.
 
-### Option A: environment variable
+Settings are stored per user under `HKEY_CURRENT_USER\Software\CanAnalyzer`, and recorded logs
+default to `Documents\CAN Analyzer logs`.
 
-From a "x64 Native Tools Command Prompt" (MSVC) with CMake and Ninja on PATH:
+## Build from source
+
+Requirements: Qt 6.5+ (developed with Qt 6.12.0, MSVC 64-bit kit), CMake ≥ 3.25, Ninja and
+a C++20 compiler (Visual Studio 2022 or newer). Machine paths are never committed:
+`CMakePresets.json` reads the Qt kit from the `QT_ROOT` environment variable, and your own
+paths go in the git-ignored `CMakeUserPresets.json`.
 
 ```bat
 set QT_ROOT=C:\Qt\6.12.0\msvc2022_64
 cmake --preset release
 cmake --build --preset release
 ctest --preset release
+cmake --build --preset release --target package_zip   :: dist\CANSignalAnalyzer-<version>-win64.zip
 ```
 
-### Option B: user preset (recommended)
+Or, in one step (build, deploy the Qt runtime, start):
+`powershell -ExecutionPolicy Bypass -File scripts\run.ps1`.
 
-Copy `CMakeUserPresets.json.example` to `CMakeUserPresets.json`, fill in your Qt kit and
-Ninja paths, then:
+Details, the user preset and Qt Creator setup are in [docs/building.md](docs/building.md).
 
-```bat
-cmake --preset local-release
-cmake --build --preset local-release
-ctest --preset local-release
-```
+**Command line**:
+- `can_analyzer [log]` opens a log in replay.
+- `--rate <fps>` sets the simulator rate. `--seed <n>` makes the simulated traffic reproducible.
+- `--demo` records the scripted showcase (application window only, 12 fps JPEG frames plus
+  8 screenshots in `evidence/`). `--layout-check` captures edge cases.
+- `--smoke-test <log>` is a quick self-test used for the release package.
 
-### Build, deploy and run in one step (recommended)
+The version is defined once, in the top-level `CMakeLists.txt`.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\run.ps1
-```
+## Formats
 
-`scripts/run.ps1` picks the `local-release` preset (or `release` + `QT_ROOT` when there is no
-user preset), loads the MSVC environment with `vswhere`/`vcvars64.bat` inside its own
-process, uses the CMake and Ninja that ship with Qt, builds, runs the `deploy` target
-(windeployqt) and starts the app, printing each step. Options: `-NoLaunch` (build and
-deploy only), `-Preset <name>`, `-AppArgs '--rate','2000'`.
+- **`.canlog`**: a compact, versioned, block-based binary log with relative timestamps,
+  CRC-protected blocks that double as the seek index, and crash-safe streaming writes.
+  Specification: [docs/log-format.md](docs/log-format.md).
+- **CSV frames**: `time_s,channel,id,format,dlc,data`, documented in the same file.
+- **DBC**: the common subset (`BO_`, `SG_` incl. simple multiplexing, `VAL_`, `CM_`,
+  `BA_ "GenMsgCycleTime"`). Not supported: CAN FD, extended multiplexing, float signals,
+  named value tables, signal groups.
 
-After the deploy step the executable is:
+## License
 
-```
-<repo>\build\local-release\can_analyzer.exe
-```
-
-That folder then also holds the Qt DLLs, plugins and QML modules, so the exe can be
-started by double-clicking it. With the generic `release` preset the folder is
-`build\release\` instead.
-
-### Running manually
-
-The build tree does not contain the Qt DLLs. Either put `%QT_ROOT%\bin` on PATH for the
-current shell, or deploy the runtime next to the executable once:
-
-```bat
-cmake --build --preset local-release --target deploy
-build\local-release\can_analyzer.exe
-```
-
-Command-line options: `--rate <fps>` (initial rate, `0` = nominal), `--seed <n>`,
-`--capacity <frames>` (ring buffer size), `--demo`, `--layout-check`, `--evidence-dir <dir>`.
-The simulator starts in "Demo vehicle" mode; switch to "Raw patterns" in the toolbar.
-
-## Opening the project in Qt Creator 21
-
-Placeholders: `<QtDir>` is the folder you installed Qt into (the one that contains
-`6.12.0\` and `Tools\`, e.g. `C:\Qt`), `<repo>` is your clone of this repository. The
-versions are the ones the project was developed and checked with.
-
-| What | Path / value |
-|---|---|
-| Qt Creator 21 | `<QtDir>\Tools\Qt Creator 21.0.0-rc1\bin\qtcreator.exe` (21.0.0-rc1). If both are installed, `<QtDir>\Tools\QtCreator\bin\qtcreator.exe` may be an older release (20.0.2 on the development machine). |
-| Qt version (qmake) | `<QtDir>\6.12.0\msvc2022_64\bin\qmake.exe` (Qt 6.12.0) |
-| CMake | `<QtDir>\Tools\CMake_64\bin\cmake.exe` (3.30.5) |
-| Ninja | `<QtDir>\Tools\Ninja\ninja.exe` (1.12.1) |
-| MSVC | Visual Studio Community 2026 18.12, MSVC toolset 14.52.37025; `C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvarsall.bat` |
-
-**Known issue:** on the development machine the Qt installer registered its kits, Qt
-versions, CMake and MinGW entries under a different drive than the one Qt was actually
-installed on. The pre-made kit **"Desktop Qt 6.12.0 MSVC2022 64bit"** then shows a red
-error (Qt version and CMake not found). If yours shows that error, do not use it; set up
-the pieces once as below. If it is fine, you can pick it and skip to "Open, build, run"
-(still add the Ninja line from step 4).
-
-### One-time setup: Edit → Preferences → Kits
-
-1. **Qt Versions** tab → **Add…** → select
-   `<QtDir>\6.12.0\msvc2022_64\bin\qmake.exe` → it appears as
-   "Qt 6.12.0 MSVC2022 64bit" under *Manual* → **Apply**.
-2. **Compilers** tab → check *Auto-detected* → **C++** for an entry named
-   "Microsoft Visual C++ Compiler 18.12… (amd64)". Qt Creator finds Visual Studio itself,
-   so normally nothing is needed. If it is missing: **Add → MSVC → C++**, Initialization:
-   `C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvarsall.bat`,
-   argument `amd64` → **Apply**. Repeat for **C** if you like (only C++ is used).
-3. **CMake** tab (in some versions: *Preferences → CMake → Tools*) → **Add** →
-   Path `<QtDir>\Tools\CMake_64\bin\cmake.exe`, name e.g. "CMake 3.30.5 (Qt, manual)"
-   → **Apply**. If the auto-detected "CMake 3.30.5 (Qt)" entry shows an error, ignore it.
-4. **Kits** tab → **Add** → fill in:
-   - Name: `Qt 6.12.0 MSVC 64-bit (manual)`
-   - Compiler C++: the *Microsoft Visual C++ Compiler 18.12… (amd64)* entry from step 2
-     (C: the matching C entry, or leave it)
-   - Qt version: *Qt 6.12.0 MSVC2022 64bit* from step 1
-   - CMake Tool: the entry from step 3
-   - CMake generator: **Ninja**
-   - CMake Configuration → **Change…** → add the line
-     `CMAKE_MAKE_PROGRAM:FILEPATH=<QtDir>/Tools/Ninja/ninja.exe` (with forward slashes)
-     (Ninja is not on PATH, so CMake must be told where it is)
-   - Debugger: none is available (see below)
-   → **Apply** / **OK**. The kit must show no red error icon.
-
-### Open, build, run
-
-1. **File → Open File or Project…** → select `<repo>\CMakeLists.txt`.
-2. On the *Configure Project* page tick only the kit **Qt 6.12.0 MSVC 64-bit (manual)** and
-   its **Release** build (Debug is fine too). Qt Creator also lists the CMake presets from
-   `CMakePresets.json` / `CMakeUserPresets.json` (`release`, `debug`, `local-release`)
-   as extra entries; leave those unticked. Click **Configure Project**.
-3. **Build → Build Project** (Ctrl+B), then **Run** (Ctrl+R). Running from Qt Creator
-   needs no deploy step: Qt Creator adds the kit's Qt `bin` folder to the run
-   environment. Command-line options (e.g. `--rate 2000`) go in
-   *Projects → Run → Command line arguments*.
-4. The unit tests appear under **Tools → Tests** (CTest) and can be run from there.
-
-**Debugging:** the development machine has no CDB (the "Debugging Tools for Windows" feature of the
-Windows SDK is not installed), so the MSVC kit can build and run but not debug. Installing
-that Windows SDK feature adds `cdb.exe`, which Qt Creator then detects automatically.
-
-## Demo mode
-
-```bat
-can_analyzer.exe --demo --rate 1000
-powershell -ExecutionPolicy Bypass -File tools\zip-frames.ps1
-```
-
-`--demo` plays a scripted, **deterministic** scene of 45 s on the Plots tab: load the demo
-database, add speed + rpm, throttle + torque, steering and the gear as a step plot, follow
-live with different windows, zoom in, pan, place cursors A and B (delta readout), show the
-crosshair tooltip, toggle a legend entry, drag a threshold line, a 30 s window with the
-min/max band, pause, and the light theme. It saves:
-
-- `evidence/frames/frame_NNNN.jpg` — 541 JPEG frames at exactly **12 fps** (1280 × 800,
-  quality 80). Simulated time, the script and every QML animation advance by exactly 1/12 s
-  per frame (manual clock + custom animation driver), and the real mouse is ignored, so
-  playback is smooth and reproducible.
-- `evidence/screenshots/01…06-*.png` — six named screenshots.
-- `evidence/demo-log.txt` — progress and sizes.
-
-Only the application window is captured (`QQuickWindow::grabWindow`), never the desktop.
-`tools/zip-frames.ps1` packs the frames into `evidence/frames.zip` (about 41 MB). Assemble a
-video with any tool, e.g. `ffmpeg -framerate 12 -i frame_%04d.jpg -c:v libx264 -pix_fmt
-yuv420p demo.mp4`. `--layout-check` captures edge cases (no database, a broken DBC file,
-minimum window size incl. plots, multiplexed message, raw mode, PNG/CSV export) into
-`evidence/checks/`. `evidence/` is git-ignored.
+- CAN Analyzer's own code is under the **MIT license** ([LICENSE](LICENSE)).
+- **Qt** is used under the **GNU LGPL v3**, dynamically linked and unmodified. Modules:
+  Qt Core, Gui, Qml, Quick, Quick Controls 2, Quick Dialogs, Quick Layouts, Quick Shapes,
+  Quick Effects, Svg, and Qt Test for the tests only. The optional benchmark additionally
+  uses Qt Charts and Qt Widgets.
+- The release zip contains the license texts, the Qt source location and how to replace
+  the Qt libraries with your own build (`THIRD_PARTY/`), plus the app-local Microsoft Visual
+  C++ runtime.
+- All data is invented: the demo database, the simulated vehicle and the sample log were
+  made for this project. The app icon and the UI icons are original.
 
 ## Roadmap
 
-1. ~~**Decoding**~~ — phase 2: DBC subset, decoder, signal list, bit layout.
-2. ~~**Plots**~~ — phase 3: live lanes, cursors, thresholds, decimation, export.
-3. **Logging**: record to an open log format with triggers and pre-trigger buffer.
-4. **Replay**: a `FrameSource` that replays logs at 1×/n× speed; the rest of the app is
-   already source-agnostic (the plots will scroll through replayed time unchanged).
-5. More DBC: extended multiplexing, float signals, CAN FD; hardware adapters behind the same
-   `FrameSource` interface; X-Y plots and FFT.
+1. **CAN FD**: 64-byte payloads, bit-rate switch, FD frames in the log format (a new flags
+   bit; the format version allows it).
+2. **Float signals** (`SIG_VALTYPE_`) and **more DBC features**: extended multiplexing,
+   named value tables, signal groups, attribute definitions.
+3. Import and export of common log formats (ASC, BLF reading).
+4. Hardware adapters behind the same `FrameSource` interface.
+5. X–Y plots, FFT and math channels; triggers with a pre-trigger buffer for recording.
 
-## Licensing
+## Documentation
 
-- Qt is used under the open-source **GNU LGPL v3**, **dynamically linked** (the Qt DLLs
-  are separate files and can be replaced by the user). No Qt source code is modified.
-- Qt modules used: **Qt Core, Qt Gui, Qt Qml, Qt Quick, Qt Quick Controls 2** (incl.
-  Templates and the Basic fallback style), **Qt Quick Dialogs** (file dialogs), **Qt Quick
-  Shapes** (dashed threshold lines), **Qt Quick Effects** (shadows, via the `QtQuick.Effects`
-  QML module), **Qt Svg** (icon rendering), and **Qt Test** (tests only). The optional
-  `can_charts_bench` benchmark additionally uses **Qt Charts** and **Qt Widgets**; it is not
-  part of the application.
-- Fonts are not shipped: the app uses Segoe UI Variable / Cascadia Mono already installed
-  with Windows.
-- No proprietary code, data, DBC files, captures or configurations are included. All CAN
-  IDs, message and signal names and payloads are invented and generated by the simulator;
-  `demo_vehicle.dbc` is an invented example written for this project (the DBC text format
-  itself is a public, widely documented format). The DBC parser is original code. The icons
-  are original.
+[Case study](docs/case-study.md) · [Log format](docs/log-format.md) ·
+[Decisions](docs/decisions.md) · [Building](docs/building.md) ·
+Plain-English explainers: [phase 1](docs/phase1-explained.md),
+[phase 2](docs/phase2-explained.md), [phase 3](docs/phase3-explained.md),
+[phase 4](docs/phase4-explained.md)

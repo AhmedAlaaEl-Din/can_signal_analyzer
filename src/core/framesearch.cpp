@@ -126,6 +126,11 @@ FrameSearch FrameSearch::parse(const QString &input, std::shared_ptr<const Datab
         return s;
     }
 
+    // An operator without a complete "Signal op value" is an unfinished condition.
+    static const QRegularExpression anyOp(QStringLiteral("[<>=!]"));
+    if (text.contains(anyOp))
+        return invalid(tr("Write a condition as Signal > value, e.g. VehicleSpeed > 100."));
+
     // ---- explicit id prefix
     QString idText;
     static const QRegularExpression idPrefix(QStringLiteral("^id\\s*[: ]\\s*(\\S+)$"), QRegularExpression::CaseInsensitiveOption);
@@ -136,6 +141,9 @@ FrameSearch FrameSearch::parse(const QString &input, std::shared_ptr<const Datab
     const QStringList tokens = text.split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
     if (idText.isEmpty() && tokens.size() >= 2) {
         // ---- data pattern
+        if (!isByteToken(tokens[0]) && !isWildToken(tokens[0]))
+            return invalid(db ? tr("Not an ID, message, data pattern or signal condition.")
+                              : tr("Not an ID or data pattern (load a database for signal conditions)."));
         if (tokens.size() > CanFrame::kMaxDlc)
             return invalid(tr("A data pattern has at most 8 bytes."));
         for (int i = 0; i < tokens.size(); ++i) {
@@ -154,7 +162,7 @@ FrameSearch FrameSearch::parse(const QString &input, std::shared_ptr<const Datab
         for (int i = 0; i < s.m_patternLength; ++i)
             shown << (s.m_wild[static_cast<std::size_t>(i)] ? QStringLiteral("??")
                                                             : QStringLiteral("%1").arg(s.m_bytes[static_cast<std::size_t>(i)], 2, 16, QLatin1Char('0')).toUpper());
-        s.m_description = tr("Data %1…").arg(shown.join(QLatin1Char(' ')));
+        s.m_description = tr("Data %1 (from byte 0)").arg(shown.join(QLatin1Char(' ')));
         return s;
     }
     if (idText.isEmpty())

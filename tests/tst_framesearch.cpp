@@ -80,7 +80,7 @@ private slots:
         QVERIFY(!s.matches(frame(1, {0x12, 0xAB, 0xFE})));
         QVERIFY(!s.matches(frame(1, {0x13, 0xAB, 0xFF})));
         QVERIFY(!s.matches(frame(1, {0x12, 0xAB})));                  // too short
-        QCOMPARE(s.description(), QStringLiteral("Data 12 ?? FF…"));
+        QCOMPARE(s.description(), QStringLiteral("Data 12 ?? FF (from byte 0)"));
         // Other wildcard spellings and single hex digits.
         QVERIFY(FrameSearch::parse(QStringLiteral("? xx ** a"), nullptr).matches(frame(1, {9, 9, 9, 0x0A})));
         QVERIFY(!FrameSearch::parse(QStringLiteral("? xx ** a"), nullptr).matches(frame(1, {9, 9, 9, 0x0B})));
@@ -125,6 +125,9 @@ private slots:
         QVERIFY(FrameSearch::parse(QStringLiteral("GearLever = \"%1\"").arg(text), db).matches(f));
 
         // Errors.
+        QVERIFY(FrameSearch::parse(QStringLiteral("VehicleSpeed >"), db).error().contains(QStringLiteral("Signal > value")));
+        QVERIFY(FrameSearch::parse(QStringLiteral("> 100"), db).error().contains(QStringLiteral("Signal > value")));
+        QVERIFY(FrameSearch::parse(QStringLiteral("Vehicle Speed"), db).error().contains(QStringLiteral("Not an ID")));
         QVERIFY(FrameSearch::parse(QStringLiteral("NoSuchSignal > 1"), db).error().contains(QStringLiteral("Unknown signal")));
         QVERIFY(FrameSearch::parse(QStringLiteral("VehicleSpeed > fast"), db).error().contains(QStringLiteral("not a number")));
         QVERIFY(FrameSearch::parse(QStringLiteral("GearLever = Warp"), db).error().contains(QStringLiteral("state of")));

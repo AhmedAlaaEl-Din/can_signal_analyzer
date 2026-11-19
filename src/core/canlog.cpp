@@ -465,32 +465,65 @@ QByteArray csvHeaderLine()
     return QByteArrayLiteral("time_s,channel,id,format,dlc,data\n");
 }
 
-QByteArray toCsvLine(const CanFrame &f)
+namespace {
+
+// Formats one CSV line into buf (no allocations); returns its length.
+int formatCsvLine(const CanFrame &f, char *buf)
 {
     static const char hex[] = "0123456789ABCDEF";
-    QByteArray line;
-    line.reserve(64);
-    const std::int64_t us = f.timestampUs;
-    const std::int64_t sec = us / 1000000;
-    const std::int64_t frac = us % 1000000;
-    line.append(QByteArray::number(static_cast<qlonglong>(sec)));
-    line.append('.');
-    line.append(QByteArray::number(static_cast<qlonglong>(frac < 0 ? -frac : frac)).rightJustified(6, '0'));
-    line.append(',');
-    line.append(QByteArray::number(f.channel));
-    line.append(',');
-    line.append(QByteArray::number(f.id, 16).toUpper().rightJustified(f.extended ? 8 : 3, '0'));
-    line.append(f.extended ? ",ext," : ",std,");
-    line.append(QByteArray::number(f.dlc));
-    line.append(',');
+    char *p = buf;
+    std::int64_t us = f.timestampUs;
+    if (us < 0) {
+        *p++ = '-';
+        us = -us;
+    }
+    char tmp[24];
+    int n = 0;
+    std::int64_t sec = us / 1000000;
+    do {
+        tmp[n++] = static_cast<char>('0' + sec % 10);
+        sec /= 10;
+    } while (sec > 0);
+    while (n > 0)
+        *p++ = tmp[--n];
+    *p++ = '.';
+    std::int64_t frac = us % 1000000;
+    for (int i = 5; i >= 0; --i) {
+        p[i] = static_cast<char>('0' + frac % 10);
+        frac /= 10;
+    }
+    p += 6;
+    *p++ = ',';
+    int ch = f.channel;
+    if (ch >= 100)
+        *p++ = static_cast<char>('0' + ch / 100);
+    if (ch >= 10)
+        *p++ = static_cast<char>('0' + (ch / 10) % 10);
+    *p++ = static_cast<char>('0' + ch % 10);
+    *p++ = ',';
+    const int digits = f.extended ? 8 : 3;
+    for (int i = digits - 1; i >= 0; --i)
+        *p++ = hex[(f.id >> (4 * i)) & 0xF];
+    std::memcpy(p, f.extended ? ",ext," : ",std,", 5);
+    p += 5;
+    *p++ = static_cast<char>('0' + std::min<int>(f.dlc, 8));
+    *p++ = ',';
     for (int i = 0; i < f.dlc && i < CanFrame::kMaxDlc; ++i) {
         if (i)
-            line.append(' ');
-        line.append(hex[f.data[static_cast<std::size_t>(i)] >> 4]);
-        line.append(hex[f.data[static_cast<std::size_t>(i)] & 0xF]);
+            *p++ = ' ';
+        *p++ = hex[f.data[static_cast<std::size_t>(i)] >> 4];
+        *p++ = hex[f.data[static_cast<std::size_t>(i)] & 0xF];
     }
-    line.append('\n');
-    return line;
+    *p++ = '\n';
+    return static_cast<int>(p - buf);
+}
+
+} // namespace
+
+QByteArray toCsvLine(const CanFrame &f)
+{
+    char buf[96];
+    return QByteArray(buf, formatCsvLine(f, buf));
 }
 
 bool parseCsvLine(QByteArrayView line, CanFrame &out, QString *error)
@@ -576,14 +609,20 @@ ConvertResult exportCsv(const QString &canlogPath, const QString &csvPath)
         return r;
     }
     out.write(csvHeaderLine());
+    // Lines are formatted into one buffer that is written in ~1 MB pieces.
     QByteArray chunk;
+    chunk.reserve(1 << 20);
+    char line[96];
     for (std::size_t b = 0; b < reader.blocks().size(); ++b) {
-        chunk.clear();
         for (const CanFrame &f : reader.blockFrames(b))
-            chunk.append(toCsvLine(f));
-        out.write(chunk);
+            chunk.append(line, formatCsvLine(f, line));
+        if (chunk.size() >= (1 << 20) - 8192) {
+            out.write(chunk);
+            chunk.clear();
+        }
         r.frames += static_cast<std::int64_t>(reader.blocks()[b].frameCount);
     }
+    out.write(chunk);
     if (!out.commit()) {
         r.error = tr("Could not write %1: %2").arg(QFileInfo(csvPath).fileName(), out.errorString());
         return r;

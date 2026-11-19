@@ -31,10 +31,19 @@ Rectangle {
         Chip {
             dot: true
             pulsing: Session.running && !Session.paused
-            tone: bar.stateTone
-            label: Session.paused ? qsTr("Paused") : Session.running ? qsTr("Live") : qsTr("Stopped")
+            tone: Session.replayMode ? (Session.running ? "accent" : "neutral") : bar.stateTone
+            label: Session.replayMode ? (Session.running ? qsTr("Replay") : Session.replay.atEnd ? qsTr("Replay ended") : qsTr("Replay paused"))
+                 : Session.paused ? qsTr("Paused") : Session.running ? qsTr("Live") : qsTr("Stopped")
             value: Session.paused && Session.pendingWhilePaused > 0
                    ? qsTr("+%1 held").arg(Fmt.grouped(Session.pendingWhilePaused)) : ""
+        }
+        Chip {
+            visible: Session.recorder.recording
+            dot: true
+            pulsing: true
+            tone: "error"
+            label: qsTr("Recording")
+            value: Fmt.duration(Session.recorder.durationUs) + " · " + Fmt.bytes(Session.recorder.bytesWritten)
         }
         Chip {
             label: qsTr("Rate")
@@ -78,7 +87,7 @@ Rectangle {
             Text { text: qsTr("pause"); color: Theme.textFaint; font.pixelSize: Theme.type.small; font.family: Theme.fontSans; anchors.verticalCenter: parent.verticalCenter }
             Item { width: Theme.space.xs; height: 1 }
             Kbd { text: "Ctrl+F" }
-            Text { text: qsTr("filter"); color: Theme.textFaint; font.pixelSize: Theme.type.small; font.family: Theme.fontSans; anchors.verticalCenter: parent.verticalCenter }
+            Text { text: qsTr("find"); color: Theme.textFaint; font.pixelSize: Theme.type.small; font.family: Theme.fontSans; anchors.verticalCenter: parent.verticalCenter }
         }
     }
 }

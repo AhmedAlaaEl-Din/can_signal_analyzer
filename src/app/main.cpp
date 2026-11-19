@@ -1,7 +1,11 @@
+#include "appservices.h"
 #include "capturesession.h"
+#include "replaysource.h"
+#include "version.h"
 #include "framemodel.h"
 #include "demodirector.h"
 #include "plotbench.h"
+#include "signaldatabase.h"
 #include "simulatedsource.h"
 
 #include <QCommandLineParser>
@@ -9,6 +13,7 @@
 #include <QDir>
 #include <QFile>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QQuickWindow>
@@ -86,7 +91,14 @@ int main(int argc, char *argv[])
     const QCommandLineOption benchOption(QStringLiteral("plot-bench"),
                                          QStringLiteral("Run the plot rendering benchmark and write the results to <file>."),
                                          QStringLiteral("file"));
-    parser.addOptions({demoOption, checkOption, outOption, seedOption, rateOption, capacityOption, benchOption});
+    const QCommandLineOption smokeOption(QStringLiteral("smoke-test"),
+                                         QStringLiteral("Start, load the demo database, replay <log> for a moment, "
+                                                        "write the result next to it (.smoke.txt) and exit."),
+                                         QStringLiteral("log"));
+    parser.addOptions({demoOption, checkOption, outOption, seedOption, rateOption, capacityOption, benchOption,
+                       smokeOption});
+    parser.addPositionalArgument(QStringLiteral("file"), QStringLiteral("A .canlog or .csv log to open in replay."),
+                                 QStringLiteral("[file]"));
     parser.process(app);
     if (parser.isSet(benchOption))
         return runPlotBench(parser.value(benchOption));
@@ -111,6 +123,7 @@ int main(int argc, char *argv[])
     }
 
     QQuickStyle::setStyle(QStringLiteral("CanStyle"));
+    QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/qt/qml/CanAnalyzer/icons/app.svg")));
 
     auto *source = new can::SimulatedSource(seed, can::SimulatorEngine::Mode::Vehicle);
     can::CaptureSession session(source);
@@ -118,6 +131,12 @@ int main(int argc, char *argv[])
     session.setBurstsEnabled(true);
     session.frameModel()->setCapacity(std::max(1000, parser.value(capacityOption).toInt()));
     qmlRegisterSingletonInstance("CanAnalyzer.Core", 1, 0, "Session", &session);
+    AppInfo appInfo;
+    qmlRegisterSingletonInstance("CanAnalyzer.Core", 1, 0, "AppInfo", &appInfo);
+    // Scripted runs never read or write the user's settings.
+    const bool smoke = parser.isSet(smokeOption);
+    AppSettings settings(!demo && !smoke);
+    qmlRegisterSingletonInstance("CanAnalyzer.Core", 1, 0, "Settings", &settings);
 
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
@@ -137,6 +156,35 @@ int main(int argc, char *argv[])
                          Qt::QueuedConnection);
         // Give the window a moment to be exposed and laid out before the scene starts.
         QTimer::singleShot(800, director.get(), [d = director.get()] { d->start(); });
+    }
+
+    if (smoke) {
+        // Release-package check: the app starts, decodes and replays a log
+        // with only the files of the package (no Qt installation on PATH).
+        const QString log = parser.value(smokeOption);
+        QTimer::singleShot(500, &app, [&session, log] {
+            session.loadDemoSetup();
+            session.stop();
+            if (!session.openLogPath(log)) {
+                QCoreApplication::exit(3);
+                return;
+            }
+            session.replay()->setSpeed(8);
+        });
+        QTimer::singleShot(3500, &app, [&session, log] {
+            QFile out(log + QStringLiteral(".smoke.txt"));
+            const bool ok = session.replayMode() && session.totalFrames() > 1000
+                            && session.signalModel() && session.database()->isLoaded();
+            if (out.open(QIODevice::WriteOnly | QIODevice::Text))
+                out.write(QStringLiteral("ok=%1 frames=%2 qt=%3 version=%4\n")
+                              .arg(ok).arg(session.totalFrames()).arg(QString::fromLatin1(qVersion()),
+                                                                      QCoreApplication::applicationVersion())
+                              .toUtf8());
+            QCoreApplication::exit(ok ? 0 : 4);
+        });
+    } else if (!demo && !parser.positionalArguments().isEmpty()) {
+        const QString file = QDir::current().absoluteFilePath(parser.positionalArguments().constFirst());
+        QTimer::singleShot(300, &session, [&session, file] { session.openLogPath(file); });
     }
 
     const int rc = app.exec();

@@ -25,7 +25,7 @@ class CaptureSession;
 //  - Demo: deterministic. Simulated time, the scripted scene and all QML
 //    animations advance by exactly 1/12 s per captured frame (manual clock +
 //    custom animation driver), so playback at 12 fps is smooth however slow
-//    rendering is. JPEG frames go to <out>/frames, six PNG screenshots to
+//    rendering is. JPEG frames go to <out>/frames, eight PNG screenshots to
 //    <out>/screenshots.
 //  - LayoutCheck: short wall-clock scene that captures edge cases (empty
 //    states, minimum window size, wide window, bad database file) into
@@ -37,8 +37,11 @@ public:
     enum class Mode { Demo, LayoutCheck };
 
     static constexpr int kFps = 12;
-    static constexpr int kDemoDurationMs = 45000;
-    static constexpr int kCheckDurationMs = 25000;
+    static constexpr int kDemoDurationMs = 60000;
+    static constexpr int kCheckDurationMs = 34000;
+    // The simulator runs this far ahead of the scene clock (recording window
+    // over the cruise above 100 km/h and the braking that follows).
+    static constexpr qint64 kSimOffsetMs = 26000;
     static constexpr int kJpegQuality = 80; // phase 3 plots: 85 gave 62.6 MB (see decisions)
 
     DemoDirector(Mode mode, QQuickWindow *window, can::CaptureSession *session,

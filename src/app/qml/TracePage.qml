@@ -33,6 +33,49 @@ Item {
     Behavior on rise { NumberAnimation { duration: Theme.motion.slow; easing.type: Theme.motion.easing } }
 
     function focusFilter() { idField.forceActiveFocus(); idField.selectAll() }
+    signal demoRequested()
+    signal openLogRequested()
+
+    // ---- find (Ctrl+F, F3 / Shift+F3) ----
+    property bool findOpen: false
+    property int matches: 0
+    function openFind() {
+        findOpen = true
+        findField.forceActiveFocus()
+        findField.selectAll()
+    }
+    function closeFind() {
+        findOpen = false
+        findField.text = ""
+        Session.searchText = ""
+        list.forceActiveFocus()
+    }
+    function setSearch(text) {
+        findOpen = true
+        findField.text = text
+        Session.searchText = text
+        page.matches = Session.matchCount()
+    }
+    // Jump to the next / previous match from the selected row (or the view).
+    function findNext(forward) {
+        if (!Session.searchValid)
+            return false
+        let from = page.selectedSeq >= 0 ? Session.frameModel.rowForSeq(page.selectedSeq) : -1
+        if (from < 0)
+            from = forward ? -1 : list.count
+        const row = Session.findNext(from, forward)
+        page.matches = Session.matchCount()
+        if (row < 0)
+            return false
+        list.follow = false
+        list._programmatic = true
+        list.positionViewAtIndex(row, ListView.Center)
+        list._programmatic = false
+        list.rememberAnchor()
+        const item = list.itemAtIndex(row)
+        page.selectedSeq = item ? item.seq : -1
+        return true
+    }
     function setIdFilterText(text) {
         idField.text = text
         Session.idFilter = text
@@ -152,6 +195,85 @@ Item {
                 font.family: Theme.fontSans
                 font.pixelSize: Theme.type.small
                 font.features: { "tnum": 1 }
+            }
+        }
+
+        // ------------------------------------------------------------ find bar
+        Rectangle {
+            id: findBar
+            Layout.fillWidth: true
+            Layout.preferredHeight: page.findOpen ? 44 : 0
+            visible: Layout.preferredHeight > 1
+            clip: true
+            radius: Theme.radius.md
+            color: Theme.surface
+            border.width: 1
+            border.color: Session.searchError.length > 0 ? Theme.alpha(Theme.error, 0.5) : Theme.border
+            Behavior on Layout.preferredHeight { NumberAnimation { duration: Theme.motion.normal; easing.type: Theme.motion.easing } }
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Theme.space.sm
+                anchors.rightMargin: Theme.space.sm
+                spacing: Theme.space.sm
+                TextField {
+                    id: findField
+                    iconName: "search"
+                    monospace: true
+                    Layout.preferredWidth: Math.min(340, page.width * 0.34)
+                    placeholderText: qsTr("Find  1A4 · 12 ?? FF · VehicleSpeed > 100")
+                    error: Session.searchError.length > 0
+                    onTextEdited: findDebounce.restart()
+                    Timer {
+                        id: findDebounce
+                        interval: 180
+                        onTriggered: { Session.searchText = findField.text; page.matches = Session.matchCount() }
+                    }
+                    Keys.onReturnPressed: (e) => { Session.searchText = text; page.findNext(!(e.modifiers & Qt.ShiftModifier)) }
+                    Keys.onEnterPressed: (e) => { Session.searchText = text; page.findNext(!(e.modifiers & Qt.ShiftModifier)) }
+                    Keys.onEscapePressed: page.closeFind()
+                }
+                IconButton {
+                    iconName: "arrow-up"
+                    enabled: Session.searchValid
+                    tip: qsTr("Previous match  (Shift+F3)")
+                    onClicked: page.findNext(false)
+                }
+                IconButton {
+                    iconName: "arrow-down"
+                    enabled: Session.searchValid
+                    tip: qsTr("Next match  (F3)")
+                    onClicked: page.findNext(true)
+                }
+                // Interpretation of the query (or why it is not valid).
+                Chip {
+                    visible: Session.searchValid || Session.searchError.length > 0
+                    tone: Session.searchValid ? "accent" : "error"
+                    iconName: Session.searchValid ? "search" : "alert"
+                    label: Session.searchValid ? Session.searchDescription : Session.searchError
+                    Layout.maximumWidth: page.width * 0.4
+                }
+                Text {
+                    visible: Session.searchValid
+                    text: page.matches === 1 ? qsTr("1 match in the buffer") : qsTr("%1 matches in the buffer").arg(Fmt.grouped(page.matches))
+                    color: page.matches > 0 ? Theme.textMuted : Theme.warning
+                    font.family: Theme.fontSans
+                    font.pixelSize: Theme.type.small
+                    font.features: { "tnum": 1 }
+                }
+                Item { Layout.fillWidth: true }
+                Text {
+                    visible: page.width > 1100 && !Session.searchValid && Session.searchError.length === 0
+                    text: qsTr("ID or message · data bytes with ?? · Signal > value")
+                    color: Theme.textFaint
+                    font.family: Theme.fontSans
+                    font.pixelSize: Theme.type.small
+                }
+                IconButton {
+                    iconName: "close"
+                    tip: qsTr("Close find  (Esc)")
+                    onClicked: page.closeFind()
+                }
             }
         }
 
@@ -290,10 +412,19 @@ Item {
             }
 
             // Empty states
+            WelcomeState {
+                anchors.centerIn: list
+                width: list.width
+                visible: list.count === 0 && !Session.running && !Session.filterActive && !Session.replayMode
+                         && Session.totalFrames === 0
+                onDemoRequested: page.demoRequested()
+                onOpenLogRequested: page.openLogRequested()
+            }
             EmptyState {
                 anchors.centerIn: list
                 width: list.width
                 visible: list.count === 0 && (!Session.running || Session.filterActive)
+                         && !(!Session.running && !Session.filterActive && !Session.replayMode && Session.totalFrames === 0)
                 iconName: Session.filterActive ? "filter" : "inbox"
                 title: Session.filterActive ? qsTr("No frames match the filter")
                                             : qsTr("No frames yet")

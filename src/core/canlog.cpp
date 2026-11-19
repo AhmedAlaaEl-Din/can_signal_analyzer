@@ -558,7 +558,7 @@ bool parseCsvLine(QByteArrayView line, CanFrame &out, QString *error)
     if (n != dlc)
         return fail(tr("%1 data bytes but dlc is %2").arg(n).arg(dlc));
     if (!f.isValid())
-        return fail(tr("id %1 is out of range for a %2 frame")
+        return fail(tr("id %1 is out of range for %2 frames")
                         .arg(QString::fromUtf8(idText), f.extended ? QStringLiteral("29-bit") : QStringLiteral("11-bit")));
     out = f;
     return true;

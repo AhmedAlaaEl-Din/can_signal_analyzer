@@ -31,9 +31,17 @@ inline void setColored(QSGGeometry::ColoredPoint2D &v, float x, float y, const Q
 }
 
 // Thick polyline as a triangle strip with miter joins (limited to 2x).
-void thickStrip(const std::vector<QPointF> &pts, float halfWidth, std::vector<QSGGeometry::Point2D> &out)
+void thickStrip(const std::vector<QPointF> &input, float halfWidth, std::vector<QSGGeometry::Point2D> &out)
 {
     out.clear();
+    // Drop points that coincide with their predecessor: a zero-length segment
+    // has no direction, and its collapsed join pinches the line.
+    static thread_local std::vector<QPointF> pts;
+    pts.clear();
+    pts.reserve(input.size());
+    for (const QPointF &p : input)
+        if (pts.empty() || std::abs(p.x() - pts.back().x()) + std::abs(p.y() - pts.back().y()) > 0.05)
+            pts.push_back(p);
     const std::size_t n = pts.size();
     if (n < 2)
         return;
@@ -305,7 +313,10 @@ void PlotCanvas::updatePolish()
                 }
             } else {
                 // Zoomed out: one entry per pixel column, with the min/max band.
-                p.banded = true;
+                // Step series (enumerations) get no band: a fast-toggling state
+                // would otherwise turn into a fuzzy block. They are drawn as one
+                // clean step line through each column's last state instead.
+                p.banded = !p.step;
                 zoomedOut = true;
                 const auto cols = ts->decimate(t0, t1, columns);
                 const double colW = w / columns;
@@ -313,12 +324,14 @@ void PlotCanvas::updatePolish()
                     const can::ColumnStat &cs = cols[static_cast<std::size_t>(c)];
                     if (cs.count == 0)
                         continue;
-                    p.xs.push_back((c + 0.5) * colW);
+                    sLo = std::min(sLo, cs.min);
+                    sHi = std::max(sHi, cs.max);
+                    if (p.step && !p.values.empty() && p.values.back() == cs.last)
+                        continue; // unchanged state: the step line carries it on
+                    p.xs.push_back(p.step ? c * colW : (c + 0.5) * colW);
                     p.values.push_back(cs.last);
                     p.bandMin.push_back(cs.min);
                     p.bandMax.push_back(cs.max);
-                    sLo = std::min(sLo, cs.min);
-                    sHi = std::max(sHi, cs.max);
                 }
             }
             if (sLo <= sHi) {
@@ -384,8 +397,15 @@ QSGNode *PlotCanvas::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
         pts.clear();
         pts.reserve(p.xs.size() * (p.step ? 2 : 1));
         for (std::size_t i = 0; i < p.xs.size(); ++i) {
-            if (p.step && i > 0)
-                pts.emplace_back(p.xs[i], yOf(p.values[i - 1]));
+            if (p.step) {
+                // A step series only needs its corners: samples that repeat the
+                // previous state add nothing, and the zero-length segments they
+                // create make the thick-line joins flicker (a fuzzy line).
+                if (i > 0 && p.values[i] == p.values[i - 1])
+                    continue;
+                if (i > 0)
+                    pts.emplace_back(p.xs[i], yOf(p.values[i - 1]));
+            }
             pts.emplace_back(p.xs[i], yOf(p.values[i]));
         }
         // Extend a step series to the right edge.

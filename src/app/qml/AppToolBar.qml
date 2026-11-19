@@ -8,6 +8,9 @@ import CanAnalyzer.Core
 // settings and theme switch on the right.
 Rectangle {
     id: bar
+    signal recordRequested()
+    signal openLogRequested()
+    signal aboutRequested()
     implicitHeight: Theme.size.toolbar
     color: Theme.surface
 
@@ -26,17 +29,12 @@ Rectangle {
         spacing: Theme.space.sm
 
         // Identity
-        Rectangle {
+        Image {
             Layout.preferredWidth: 30
             Layout.preferredHeight: 30
-            radius: 8
-            color: Theme.accent
-            Icon {
-                anchors.centerIn: parent
-                name: "pulse"
-                size: 18
-                color: Theme.textOnAccent
-            }
+            source: "qrc:/qt/qml/CanAnalyzer/icons/app.svg"
+            sourceSize: Qt.size(60, 60)
+            smooth: true
         }
         Column {
             Layout.leftMargin: Theme.space.xs
@@ -49,7 +47,10 @@ Rectangle {
                 font.weight: Font.DemiBold
             }
             Text {
-                text: qsTr("Simulated bus · %1 kbit/s").arg(Session.bitrate / 1000)
+                text: Session.replayMode ? qsTr("Replay · %1").arg(Session.replay.fileName)
+                                         : qsTr("Simulated bus · %1 kbit/s").arg(Session.bitrate / 1000)
+                elide: Text.ElideMiddle
+                width: Math.min(implicitWidth, 220)
                 color: Theme.textFaint
                 font.family: Theme.fontSans
                 font.pixelSize: Theme.type.caption
@@ -65,7 +66,18 @@ Rectangle {
 
         // Capture controls
         Button {
+            visible: Session.replayMode
+            variant: "secondary"
+            iconName: "activity"
+            text: qsTr("Back to live")
+            onClicked: Session.closeLog()
+            ToolTip.visible: hovered
+            ToolTip.text: qsTr("Close the replay and return to the simulator")
+            ToolTip.delay: 600
+        }
+        Button {
             id: runButton
+            visible: !Session.replayMode
             variant: Session.running ? "secondary" : "primary"
             iconName: Session.running ? "stop" : "play"
             text: Session.running ? qsTr("Stop") : qsTr("Start")
@@ -76,6 +88,7 @@ Rectangle {
             ToolTip.delay: 600
         }
         ToolButton {
+            visible: !Session.replayMode
             iconName: Session.paused ? "play" : "pause"
             text: Session.paused ? qsTr("Resume") : qsTr("Pause")
             checkable: true
@@ -88,6 +101,7 @@ Rectangle {
             ToolTip.delay: 600
         }
         ToolButton {
+            visible: !Session.replayMode
             iconName: "trash"
             text: qsTr("Clear")
             onClicked: Session.clear()
@@ -96,11 +110,32 @@ Rectangle {
             ToolTip.delay: 600
         }
 
+        Divider {
+            vertical: true
+            visible: !Session.replayMode
+            Layout.preferredHeight: 28
+            Layout.leftMargin: Theme.space.xs
+            Layout.rightMargin: Theme.space.xs
+        }
+        RecordButton {
+            visible: !Session.replayMode
+            onRecordRequested: bar.recordRequested()
+        }
+        ToolButton {
+            iconName: "log-file"
+            text: qsTr("Open log")
+            onClicked: bar.openLogRequested()
+            ToolTip.visible: hovered
+            ToolTip.text: qsTr("Replay a .canlog or .csv file  (Ctrl+Shift+O)")
+            ToolTip.delay: 600
+        }
+
         Item { Layout.fillWidth: true }
 
         // Source settings
         ComboBox {
             id: sourceBox
+            visible: !Session.replayMode
             prefix: qsTr("Source")
             Layout.preferredWidth: 176
             model: [qsTr("Demo vehicle"), qsTr("Raw patterns")]
@@ -112,6 +147,7 @@ Rectangle {
         }
         ComboBox {
             id: rateBox
+            visible: !Session.replayMode
             prefix: qsTr("Rate")
             Layout.preferredWidth: 152
             textRole: "label"
@@ -133,7 +169,7 @@ Rectangle {
             ToolTip.delay: 600
         }
         Switch {
-            visible: !Session.vehicleMode
+            visible: !Session.vehicleMode && !Session.replayMode
             text: qsTr("Bursts")
             checked: Session.burstsEnabled
             onToggled: Session.burstsEnabled = checked
@@ -150,6 +186,11 @@ Rectangle {
             Layout.rightMargin: Theme.space.xs
         }
 
+        IconButton {
+            iconName: "info"
+            tip: qsTr("About CAN Analyzer  (F1)")
+            onClicked: bar.aboutRequested()
+        }
         IconButton {
             id: themeButton
             iconName: Theme.dark ? "sun" : "moon"

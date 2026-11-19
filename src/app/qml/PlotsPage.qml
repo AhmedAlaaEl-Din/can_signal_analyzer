@@ -498,6 +498,42 @@ Item {
                     height: lanesArea.height
                     visible: lanes.count > 0
 
+                    // Replay markers: thin vertical lines with the marker name.
+                    Repeater {
+                        model: Session.replayMode ? Session.markers : null
+                        Item {
+                            id: mark
+                            required property var timeUs
+                            required property string name
+                            x: (Session.plot.viewStartUs, Session.plot.viewEndUs, Session.plot.xOfTime(timeUs, page.plotWidth))
+                            width: 1
+                            height: parent.height
+                            visible: x >= 0 && x <= page.plotWidth
+                            Rectangle {
+                                width: 1.5
+                                height: parent.height
+                                color: Theme.alpha(Theme.warning, 0.85)
+                            }
+                            Rectangle {
+                                x: 0
+                                y: parent.height - height - 4
+                                width: markText.implicitWidth + 10
+                                height: 18
+                                radius: 4
+                                color: Theme.warning
+                                Text {
+                                    id: markText
+                                    anchors.centerIn: parent
+                                    text: mark.name
+                                    color: Theme.dark ? "#1A1300" : "#FFFFFF"
+                                    font.family: Theme.fontSans
+                                    font.pixelSize: Theme.type.caption
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+                        }
+                    }
+
                     // Crosshair
                     Rectangle {
                         visible: page.hoverX >= 0
@@ -588,16 +624,67 @@ Item {
                     }
                 }
 
-                // Follow-live / paused pill
-                FloatingPill {
-                    anchors.horizontalCenter: overlay.horizontalCenter
-                    anchors.bottom: timeAxis.top
-                    anchors.bottomMargin: Theme.space.md
-                    visible: lanes.count > 0 && opacity > 0.01
-                    detached: !Session.plot.followLive
-                    detachedText: qsTr("Follow live")
-                    detachedIcon: "live"
-                    onJumpRequested: Session.plot.follow()
+                // Follow-live chip, docked in the corner under the value axis
+                // (left of the time axis) so it never covers a lane.
+                Rectangle {
+                    id: liveChip
+                    readonly property bool following: Session.plot.followLive && !Session.paused
+                    readonly property string label: Session.paused ? qsTr("Paused")
+                                                  : !Session.plot.followLive ? qsTr("Follow")
+                                                  : Session.replayMode ? (Session.running ? qsTr("Replay") : qsTr("Paused"))
+                                                  : qsTr("Live")
+                    visible: lanes.count > 0
+                    x: (page.axisWidth - width) / 2 + 1
+                    anchors.verticalCenter: timeAxis.verticalCenter
+                    width: liveRow.implicitWidth + 14
+                    height: 22
+                    radius: 11
+                    color: following ? Theme.alpha(Theme.accent, 0.12 + 0.04 * Theme.t)
+                         : chipArea.containsMouse ? Theme.accentHover : Theme.accent
+                    border.width: following ? 1 : 0
+                    border.color: Theme.alpha(Theme.accent, 0.35)
+                    Behavior on color { ColorAnimation { duration: Theme.motion.fast } }
+                    Row {
+                        id: liveRow
+                        anchors.centerIn: parent
+                        spacing: 5
+                        Rectangle {
+                            visible: liveChip.following
+                            width: 6; height: 6; radius: 3
+                            color: Theme.accentText
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Icon {
+                            visible: !liveChip.following
+                            name: Session.paused ? "play" : "live"
+                            size: 12
+                            color: Theme.textOnAccent
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text {
+                            text: liveChip.label
+                            color: liveChip.following ? Theme.accentText : Theme.textOnAccent
+                            font.family: Theme.fontSans
+                            font.pixelSize: Theme.type.caption
+                            font.weight: Font.DemiBold
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    MouseArea {
+                        id: chipArea
+                        anchors.fill: parent
+                        hoverEnabled: !page.demoMode
+                        enabled: !liveChip.following
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (Session.paused)
+                                Session.paused = false
+                            Session.plot.follow()
+                        }
+                    }
+                    ToolTip.visible: chipArea.containsMouse
+                    ToolTip.text: Session.paused ? qsTr("Resume the live view  (Space)") : qsTr("Follow the newest data  (F)")
+                    ToolTip.delay: 500
                 }
 
                 // ---- empty states ----
@@ -617,7 +704,7 @@ Item {
                         variant: "primary"
                         iconName: "database"
                         text: qsTr("Load demo database")
-                        onClicked: Session.database.loadDemo()
+                        onClicked: ApplicationWindow.window.startDemo()
                     }
                 }
                 EmptyState {

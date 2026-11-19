@@ -8,6 +8,7 @@ T.ToolButton {
     id: control
     property string iconName: ""
     property int iconSize: 15
+    property color iconColor: _fg
 
     readonly property color _fg: !enabled ? Theme.textFaint
                                : checked ? Theme.accentText
@@ -40,7 +41,7 @@ T.ToolButton {
                 visible: control.iconName.length > 0
                 name: control.iconName
                 size: control.iconSize
-                color: control._fg
+                color: control.iconColor
                 anchors.verticalCenter: parent.verticalCenter
             }
             Text {

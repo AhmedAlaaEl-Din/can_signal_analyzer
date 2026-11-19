@@ -286,6 +286,11 @@ void CaptureSession::updateStatistics()
     m_stats.tick(t);
     m_fps = m_stats.framesPerSecond(t);
     m_busLoad = m_stats.busLoad(t);
+    if (m_replayMode && m_replay->speed() > 0) {
+        // At 8x the frames arrive 8 times faster than on the recorded bus.
+        m_fps /= m_replay->speed();
+        m_busLoad /= m_replay->speed();
+    }
     if (!isRunning() && m_fps < 0.5)
         m_statsTimer.stop();
     emit statisticsChanged();

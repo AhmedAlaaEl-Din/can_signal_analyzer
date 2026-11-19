@@ -148,8 +148,14 @@ void Sparkline::paint(QPainter *p)
     if (first == samples.end())
         return;
 
-    double lo = first->min, hi = first->max;
-    for (auto it = first; it != samples.end(); ++it) {
+    // Scale to the samples inside the visible window only (the one sample kept
+    // before the window just anchors the line at the left edge), so slow
+    // signals still show their shape; add a small margin above and below.
+    auto scaleFrom = std::find_if(first, samples.end(), [start](const auto &s) { return s.timeUs >= start; });
+    if (scaleFrom == samples.end())
+        scaleFrom = first;
+    double lo = scaleFrom->min, hi = scaleFrom->max;
+    for (auto it = scaleFrom; it != samples.end(); ++it) {
         lo = std::min(lo, it->min);
         hi = std::max(hi, it->max);
     }
@@ -161,6 +167,10 @@ void Sparkline::paint(QPainter *p)
         lo -= 1;
         hi += 1;
         span = 2;
+    } else {
+        lo -= span * 0.08;
+        hi += span * 0.08;
+        span = hi - lo;
     }
     auto xOf = [&](qint64 t) {
         return std::clamp<qreal>((static_cast<qreal>(t - start) / static_cast<qreal>(m_windowUs)) * w, 0, w);

@@ -167,6 +167,76 @@ private slots:
         QVERIFY(checked > 500);
     }
 
+    // Every analog signal must move with the drive cycle and must not sit at a
+    // limit of its DBC range for more than a few seconds.
+    void analogSignalsVaryAndStayOffLimits()
+    {
+        const auto db = demoDatabase();
+        const auto r = run(21, 60'000'000, 10'000);
+        struct Track
+        {
+            double lo = 1e300, hi = -1e300;
+            std::int64_t limitSince = -1;
+            std::int64_t longestAtLimitUs = 0;
+        };
+        std::map<QString, Track> tracks;
+        auto isAnalog = [](const SignalDef &s) {
+            return s.valueTable.empty() && !s.name.contains(QLatin1String("Counter"))
+                   && s.muxRole != SignalDef::MuxRole::Multiplexor && s.length >= 8 && !s.unit.isEmpty();
+        };
+        for (const auto &f : r.frames) {
+            const MessageDef *m = db->find(f.id, f.extended);
+            for (const auto &d : Decoder::decode(*m, f)) {
+                const SignalDef &s = m->signalList[std::size_t(d.signalIndex)];
+                if (!isAnalog(s))
+                    continue;
+                Track &t = tracks[s.name];
+                t.lo = std::min(t.lo, d.physical);
+                t.hi = std::max(t.hi, d.physical);
+                const double tol = std::abs(s.factor) / 2 + 1e-9;
+                const bool atLimit = s.hasRange()
+                                     && (std::abs(d.physical - s.minimum) <= tol || std::abs(d.physical - s.maximum) <= tol);
+                if (atLimit) {
+                    if (t.limitSince < 0)
+                        t.limitSince = f.timestampUs;
+                    t.longestAtLimitUs = std::max(t.longestAtLimitUs, f.timestampUs - t.limitSince);
+                } else {
+                    t.limitSince = -1;
+                }
+            }
+        }
+        QVERIFY(tracks.size() >= 25);
+        for (const auto &[name, t] : tracks) {
+            const SignalDef *s = nullptr;
+            for (const auto &m : db->messages)
+                if (!s)
+                    s = m.findSignal(name);
+            QVERIFY2(t.hi - t.lo >= 2 * std::abs(s->factor) - 1e-9,
+                     qPrintable(QStringLiteral("%1 does not vary: %2..%3").arg(name).arg(t.lo).arg(t.hi)));
+            QVERIFY2(t.longestAtLimitUs <= 6'000'000,
+                     qPrintable(QStringLiteral("%1 stays at a range limit for %2 s").arg(name).arg(t.longestAtLimitUs / 1e6)));
+        }
+        // The specific complaint from the phase 2 demo: torque was flat at 180 Nm.
+        QVERIFY(tracks.at(QStringLiteral("EngineTorque")).hi - tracks.at(QStringLiteral("EngineTorque")).lo > 100.0);
+        QVERIFY(tracks.at(QStringLiteral("EngineTorque")).lo < 0.0); // engine braking
+        QVERIFY(tracks.at(QStringLiteral("ThrottlePosition")).hi - tracks.at(QStringLiteral("ThrottlePosition")).lo > 30.0);
+    }
+
+    void throttleAndTorqueAreNotFlat()
+    {
+        // Within any 4 s window while driving, throttle and torque must change.
+        const auto series = decodedSeries(run(4, 60'000'000, 10'000));
+        for (const QString name : {QStringLiteral("ThrottlePosition"), QStringLiteral("EngineTorque"),
+                                   QStringLiteral("EngineLoad")}) {
+            const auto &v = series.at(name);
+            const std::size_t window = 400; // 100 Hz message -> 4 s
+            for (std::size_t i = 0; i + window < v.size(); i += window / 2) {
+                const auto [mn, mx] = std::minmax_element(v.begin() + std::ptrdiff_t(i), v.begin() + std::ptrdiff_t(i + window));
+                QVERIFY2(*mx - *mn > 0.0, qPrintable(QStringLiteral("%1 flat at sample %2").arg(name).arg(i)));
+            }
+        }
+    }
+
     void rawModeStillAvailable()
     {
         SimulatorEngine e(3); // default: raw

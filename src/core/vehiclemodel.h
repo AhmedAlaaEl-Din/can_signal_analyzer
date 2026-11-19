@@ -52,7 +52,8 @@ private:
     double m_targetSpeed = 0;
     double m_accel = 8;      // km/h per s
     double m_decel = 12;
-    double m_throttleTarget = 0;
+    double m_throttleTarget = 0;  // pedal aim for the current acceleration
+    double m_throttleCommand = 0; // pedal command this step
 
     double m_speed = 0;      // km/h
     double m_distance = 0;   // km
@@ -66,6 +67,8 @@ private:
     bool m_abs = false;
     double m_absUntil = -1;
     int m_engineState = 0;
+    double m_torque = 0;     // Nm, follows throttle and the torque curve
+    double m_fuelUsed = 0;   // % of tank
     double m_coolant = 18, m_oil = 18, m_transOil = 18, m_cabin = 26;
     double m_soc = 78;
 

@@ -1,0 +1,18 @@
+# Build output
+build/
+out/
+*.user
+CMakeUserPresets.json
+
+# Demo evidence (frames/screenshots are generated locally)
+evidence/
+
+# Secrets / local env
+.env
+.env.*
+
+# IDE
+.vs/
+.vscode/
+.idea/
+.qtcreator/

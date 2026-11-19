@@ -27,12 +27,10 @@ display scaling, 2000 simulated frames/s).
 **Phase 2 (signal database):** screenshots are produced by `--demo` in
 `evidence/screenshots/` (`01-trace-decoded-dark` … `06-signal-detail-light`).
 
-<!-- Placeholders: copy the screenshots you like from evidence/screenshots/ to docs/img/ and
-     un-comment these lines.
-![Signals tab, dark](docs/img/signals-dark.png)
-![Signal detail with bit layout](docs/img/signal-detail-dark.png)
-![Decoded trace](docs/img/trace-decoded-dark.png)
--->
+| | |
+|---|---|
+| ![Signals tab, dark theme](docs/img/signals-dark.png) | ![Signal detail with bit layout, dark theme](docs/img/signal-detail-dark.png) |
+| **Signals**: grouped by message, live values, 10 s sparklines, pinned signals on top | **Signal detail**: live value and chart, bit layout of the 8 data bytes (MSB solid, LSB outlined), definition |
 
 Demo video: _link to be added_
 

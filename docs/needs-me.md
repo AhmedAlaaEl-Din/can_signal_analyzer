@@ -22,7 +22,6 @@ Items that need the owner's attention or decision. Nothing is blocking.
 6. **Review branch `phase2-decoding`** (not pushed, not merged).
 7. **Video:** `evidence/frames.zip` holds 541 JPEG frames at exactly 12 fps (1280 × 800).
    Example: `ffmpeg -framerate 12 -i frame_%04d.jpg -c:v libx264 -pix_fmt yuv420p demo.mp4`.
-8. **README screenshots (optional):** copy the ones you like from `evidence/screenshots/` to
-   `docs/img/` and un-comment the placeholder lines in the README Screenshots section.
+8. **README screenshots:** done (Signals and Signal detail, dark, in `docs/img/`).
 9. **Try the file dialog once by hand** (*Open DBC…* / Ctrl+O): it could not be clicked in an
    unattended run; the loading code behind it is tested.

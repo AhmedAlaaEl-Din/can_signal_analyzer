@@ -15,6 +15,8 @@ namespace can {
 
 class FrameModel;
 class MessageOverviewModel;
+class SignalDatabase;
+class SignalListModel;
 class SimulatedSource;
 
 // Owns the frame source and the models and moves frames between them.
@@ -31,8 +33,9 @@ class CaptureSession : public QObject
     Q_PROPERTY(bool paused READ isPaused WRITE setPaused NOTIFY pausedChanged)
     Q_PROPERTY(int targetRate READ targetRate WRITE setTargetRate NOTIFY targetRateChanged)
     Q_PROPERTY(bool burstsEnabled READ burstsEnabled WRITE setBurstsEnabled NOTIFY burstsEnabledChanged)
-    Q_PROPERTY(double nominalRate READ nominalRate CONSTANT)
-    Q_PROPERTY(QString sourceDescription READ sourceDescription CONSTANT)
+    Q_PROPERTY(double nominalRate READ nominalRate NOTIFY modeChanged)
+    Q_PROPERTY(QString sourceDescription READ sourceDescription NOTIFY modeChanged)
+    Q_PROPERTY(bool vehicleMode READ vehicleMode WRITE setVehicleMode NOTIFY modeChanged)
     Q_PROPERTY(int bitrate READ bitrate CONSTANT)
 
     Q_PROPERTY(double framesPerSecond READ framesPerSecond NOTIFY statisticsChanged)
@@ -49,6 +52,8 @@ class CaptureSession : public QObject
 
     Q_PROPERTY(QObject *frameModel READ frameModelObject CONSTANT)
     Q_PROPERTY(QObject *overviewModel READ overviewModelObject CONSTANT)
+    Q_PROPERTY(QObject *signalModel READ signalModelObject CONSTANT)
+    Q_PROPERTY(QObject *database READ databaseObject CONSTANT)
 
 public:
     static constexpr int kFlushIntervalMs = 30;
@@ -66,6 +71,8 @@ public:
     void setBurstsEnabled(bool enabled);
     double nominalRate() const;
     QString sourceDescription() const;
+    bool vehicleMode() const;
+    void setVehicleMode(bool vehicle);
     int bitrate() const { return m_stats.bitrate(); }
 
     double framesPerSecond() const { return m_fps; }
@@ -85,6 +92,14 @@ public:
 
     FrameModel *frameModel() const { return m_frames; }
     MessageOverviewModel *overviewModel() const { return m_overview; }
+    SignalListModel *signalModel() const { return m_signalModel; }
+    SignalDatabase *database() const { return m_database; }
+    SimulatedSource *source() const { return m_source; }
+
+    // Manual time (deterministic capture): timers are not used; the owner calls
+    // manualTick() after advancing the source, with its own notion of "now".
+    void setManualTime(bool manual);
+    void manualTick(qint64 nowMs);
 
 public slots:
     void start();
@@ -104,6 +119,7 @@ signals:
     void statisticsChanged();
     void filterChanged();
     void cleared();
+    void modeChanged();
 
 private:
     void onFrames(const can::CanFrameBatch &batch);
@@ -111,10 +127,18 @@ private:
     void updateStatistics();
     QObject *frameModelObject() const;
     QObject *overviewModelObject() const;
+    QObject *signalModelObject() const;
+    QObject *databaseObject() const;
+    qint64 now() const;
+    void applyDatabase();
 
     SimulatedSource *m_source;
     FrameModel *m_frames;
     MessageOverviewModel *m_overview;
+    SignalListModel *m_signalModel;
+    SignalDatabase *m_database;
+    bool m_manualTime = false;
+    qint64 m_manualNowMs = 0;
     BusStatistics m_stats;
     QElapsedTimer m_clock;
     QTimer m_flushTimer;

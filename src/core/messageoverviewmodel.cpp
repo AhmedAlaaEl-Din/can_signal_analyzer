@@ -1,5 +1,7 @@
 #include "messageoverviewmodel.h"
 
+#include "signalcodec.h"
+
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -71,6 +73,14 @@ QVariant MessageOverviewModel::data(const QModelIndex &index, int role) const
     }
     case ChangedMaskRole: return int(e.changedMask);
     case ChangeSerialRole: return QVariant::fromValue<qulonglong>(e.changeSerial);
+    case MessageNameRole: {
+        const MessageDef *m = m_db ? m_db->find(e.last.id, e.last.extended) : nullptr;
+        return m ? m->name : QString();
+    }
+    case DecodedRole: {
+        const MessageDef *m = m_db ? m_db->find(e.last.id, e.last.extended) : nullptr;
+        return m ? Decoder::toVariantList(*m, e.last) : QVariantList{};
+    }
     default: return {};
     }
 }
@@ -107,6 +117,8 @@ QHash<int, QByteArray> MessageOverviewModel::roleNames() const
         {BytesRole, "bytes"},
         {ChangedMaskRole, "changedMask"},
         {ChangeSerialRole, "changeSerial"},
+        {MessageNameRole, "messageName"},
+        {DecodedRole, "decoded"},
     });
     return names;
 }
@@ -254,6 +266,13 @@ void MessageOverviewModel::update(const CanFrame *frames, std::size_t n)
     if (inserted)
         emit countChanged();
     resort();
+}
+
+void MessageOverviewModel::setDatabase(std::shared_ptr<const Database> db)
+{
+    m_db = std::move(db);
+    if (count() > 0)
+        emit dataChanged(index(0, 0), index(count() - 1, ColumnCount - 1), {MessageNameRole, DecodedRole});
 }
 
 void MessageOverviewModel::clear()

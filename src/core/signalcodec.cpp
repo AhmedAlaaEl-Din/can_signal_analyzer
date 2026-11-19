@@ -157,6 +157,23 @@ DecodedSignal Decoder::decodeSignal(const MessageDef &message, int signalIndex, 
     return d;
 }
 
+QVariantList Decoder::toVariantList(const MessageDef &message, const CanFrame &frame)
+{
+    QVariantList list;
+    for (const DecodedSignal &d : decode(message, frame)) {
+        const SignalDef &s = message.signalList[static_cast<std::size_t>(d.signalIndex)];
+        list << QVariantMap{
+            {QStringLiteral("name"), s.name},
+            {QStringLiteral("value"), codec::formatPhysical(s, d.physical)},
+            {QStringLiteral("unit"), s.unit},
+            {QStringLiteral("enumText"), d.valueText},
+            {QStringLiteral("raw"), QVariant::fromValue<qlonglong>(d.raw)},
+            {QStringLiteral("outOfRange"), d.outOfRange},
+        };
+    }
+    return list;
+}
+
 std::vector<DecodedSignal> Decoder::decode(const MessageDef &message, const CanFrame &frame)
 {
     std::vector<DecodedSignal> out;

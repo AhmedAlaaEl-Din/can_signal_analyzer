@@ -1,5 +1,7 @@
 #include "framemodel.h"
 
+#include "signalcodec.h"
+
 #include <algorithm>
 
 namespace can {
@@ -67,6 +69,10 @@ QVariant FrameModel::data(const QModelIndex &index, int role) const
     case SeqRole: return QVariant::fromValue<qulonglong>(seq);
     case OrdinalRole: return QVariant::fromValue<qulonglong>(m_removedFromFront + static_cast<std::uint64_t>(index.row()));
     case FreshRole: return seq >= m_freshFromSeq;
+    case MessageNameRole: {
+        const MessageDef *m = m_db ? m_db->find(f.id, f.extended) : nullptr;
+        return m ? m->name : QString();
+    }
     case DeltaRole:
         return entry.deltaUs < 0 ? QStringLiteral("—")
                                  : QString::number(static_cast<double>(entry.deltaUs) / 1000.0, 'f', 3);
@@ -107,8 +113,25 @@ QHash<int, QByteArray> FrameModel::roleNames() const
         {OrdinalRole, "ordinal"},
         {FreshRole, "fresh"},
         {DeltaRole, "delta"},
+        {MessageNameRole, "messageName"},
     });
     return names;
+}
+
+void FrameModel::setDatabase(std::shared_ptr<const Database> db)
+{
+    m_db = std::move(db);
+    if (count() > 0)
+        emit dataChanged(index(0, 0), index(count() - 1, ColumnCount - 1), {MessageNameRole});
+}
+
+QVariantList FrameModel::decodedSignals(int row) const
+{
+    if (!m_db || row < 0 || row >= count())
+        return {};
+    const CanFrame &f = frameAt(row);
+    const MessageDef *m = m_db->find(f.id, f.extended);
+    return m ? Decoder::toVariantList(*m, f) : QVariantList{};
 }
 
 void FrameModel::setCapacity(int capacity)

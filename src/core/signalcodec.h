@@ -3,6 +3,8 @@
 #include "canframe.h"
 #include "dbc.h"
 
+#include <QVariantList>
+
 #include <cstdint>
 #include <vector>
 
@@ -57,6 +59,10 @@ struct DecodedSignal
 class Decoder
 {
 public:
+    // Decoded signals as a QVariantList of maps for QML:
+    // { name, value (formatted), unit, enumText, raw, outOfRange }
+    static QVariantList toVariantList(const MessageDef &message, const CanFrame &frame);
+
     // Decodes all signals of `message` present in `frame`. Signals that do not
     // fit into the frame's DLC, and multiplexed signals whose multiplexor value
     // does not match, are skipped.

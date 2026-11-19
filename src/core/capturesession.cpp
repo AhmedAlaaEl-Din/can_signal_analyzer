@@ -4,6 +4,9 @@
 #include "messageoverviewmodel.h"
 #include "signaldatabase.h"
 #include "signallistmodel.h"
+#include "plotcontroller.h"
+#include "plotmodel.h"
+#include "timeseriesstore.h"
 #include "simulatedsource.h"
 
 #include <algorithm>
@@ -18,7 +21,12 @@ CaptureSession::CaptureSession(SimulatedSource *source, QObject *parent)
     , m_overview(new MessageOverviewModel(this))
     , m_signalModel(new SignalListModel(this))
     , m_database(new SignalDatabase(this))
+    , m_store(new TimeSeriesStore(this))
+    , m_plotModel(new PlotModel(this))
+    , m_plot(new PlotController(this))
 {
+    m_signalModel->setStore(m_store);
+    m_plot->setStore(m_store);
     connect(m_database, &SignalDatabase::changed, this, &CaptureSession::applyDatabase);
     Q_ASSERT(m_source);
     if (!m_source->parent())
@@ -137,6 +145,7 @@ void CaptureSession::applyDatabase()
     m_frames->setDatabase(db);
     m_overview->setDatabase(db);
     m_signalModel->setDatabase(db);
+    m_plotModel->setDatabase(db);
 }
 
 qint64 CaptureSession::now() const
@@ -288,6 +297,21 @@ QObject *CaptureSession::signalModelObject() const
 QObject *CaptureSession::databaseObject() const
 {
     return m_database;
+}
+
+QObject *CaptureSession::timeSeriesObject() const
+{
+    return m_store;
+}
+
+QObject *CaptureSession::plotModelObject() const
+{
+    return m_plotModel;
+}
+
+QObject *CaptureSession::plotControllerObject() const
+{
+    return m_plot;
 }
 
 } // namespace can

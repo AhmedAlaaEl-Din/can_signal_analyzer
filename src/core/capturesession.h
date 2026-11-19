@@ -17,6 +17,9 @@ class FrameModel;
 class MessageOverviewModel;
 class SignalDatabase;
 class SignalListModel;
+class TimeSeriesStore;
+class PlotModel;
+class PlotController;
 class SimulatedSource;
 
 // Owns the frame source and the models and moves frames between them.
@@ -54,6 +57,9 @@ class CaptureSession : public QObject
     Q_PROPERTY(QObject *overviewModel READ overviewModelObject CONSTANT)
     Q_PROPERTY(QObject *signalModel READ signalModelObject CONSTANT)
     Q_PROPERTY(QObject *database READ databaseObject CONSTANT)
+    Q_PROPERTY(QObject *timeSeries READ timeSeriesObject CONSTANT)
+    Q_PROPERTY(QObject *plotModel READ plotModelObject CONSTANT)
+    Q_PROPERTY(QObject *plot READ plotControllerObject CONSTANT)
 
 public:
     static constexpr int kFlushIntervalMs = 30;
@@ -94,6 +100,9 @@ public:
     MessageOverviewModel *overviewModel() const { return m_overview; }
     SignalListModel *signalModel() const { return m_signalModel; }
     SignalDatabase *database() const { return m_database; }
+    TimeSeriesStore *timeSeries() const { return m_store; }
+    PlotModel *plotModel() const { return m_plotModel; }
+    PlotController *plotController() const { return m_plot; }
     SimulatedSource *source() const { return m_source; }
 
     // Manual time (deterministic capture): timers are not used; the owner calls
@@ -129,6 +138,9 @@ private:
     QObject *overviewModelObject() const;
     QObject *signalModelObject() const;
     QObject *databaseObject() const;
+    QObject *timeSeriesObject() const;
+    QObject *plotModelObject() const;
+    QObject *plotControllerObject() const;
     qint64 now() const;
     void applyDatabase();
 
@@ -137,6 +149,9 @@ private:
     MessageOverviewModel *m_overview;
     SignalListModel *m_signalModel;
     SignalDatabase *m_database;
+    TimeSeriesStore *m_store;
+    PlotModel *m_plotModel;
+    PlotController *m_plot;
     bool m_manualTime = false;
     qint64 m_manualNowMs = 0;
     BusStatistics m_stats;

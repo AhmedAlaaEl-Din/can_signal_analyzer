@@ -21,6 +21,8 @@ namespace can {
 //
 // Each signal keeps a short history (about 12 s of simulated time, one sample
 // per 40 ms bucket) that the sparkline item reads directly through history().
+class TimeSeriesStore;
+
 class SignalListModel : public QAbstractListModel
 {
     Q_OBJECT
@@ -77,6 +79,8 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     void setDatabase(std::shared_ptr<const Database> db);
+    // Every decoded value is also appended to this store (full history for plots).
+    void setStore(TimeSeriesStore *store) { m_store = store; }
     std::shared_ptr<const Database> database() const { return m_db; }
 
     void update(const CanFrame *frames, std::size_t count);
@@ -154,6 +158,7 @@ private:
     std::vector<int> m_pinOrder;
     QString m_filter;
     std::int64_t m_nowUs = 0;
+    TimeSeriesStore *m_store = nullptr;
 };
 
 } // namespace can

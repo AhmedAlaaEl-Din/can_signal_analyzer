@@ -109,9 +109,10 @@ Findings → changes:
 ## Housekeeping
 - **`design_refs/` does not exist**, so no reference images were used; the look was derived
   from first principles (see `docs/design.md`).
-- **`.claude/settings.json` contains the full toolchain paths** in its allow rules, because
-  permission rules cannot read environment variables and the brief asked for those commands
-  to be allowed. This is agent tooling config, not build config; build files use `QT_ROOT`.
+- **Claude Code permissions are split:** `.claude/settings.json` (tracked) holds only
+  generic rules (`cmake`, `ctest`, `ninja`, git status/diff/add/commit, ask on push/merge,
+  deny `.env`). The allow rules with this machine's toolchain paths live in
+  `.claude/settings.local.json`, which is git-ignored (listed in `.gitignore`).
 - **Demo timing:** the scene runs at `--rate 2000` for the delivered frames, to show the
   UI under the maximum specified load. The default interactive rate is 1000 fr/s; the app
   starts stopped, showing the empty state.

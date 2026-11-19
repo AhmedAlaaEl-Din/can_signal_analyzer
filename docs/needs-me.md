@@ -11,8 +11,8 @@ Items that need the owner's attention or decision. Nothing is blocking.
 3. **README screenshots.** The README has image placeholders under `docs/img/`. Copy the
    screenshots you like from `evidence/screenshots/` there (they are git-ignored by default
    under `evidence/`) if you want them in the repository.
-4. **Toolchain paths in `.claude/settings.json`.** They are your local Qt/CMake/Ninja paths
-   (needed for the allow rules). Remove or adjust them before publishing the repository if
-   you prefer.
+4. **Toolchain allow rules** are in the git-ignored `.claude/settings.local.json`; on a
+   new machine, create that file with your own Qt/CMake/Ninja paths if you want them
+   pre-approved.
 5. **Git identity.** Commits use your global git identity; the commit message trailer names
    the assistant as co-author. Amend if you want a different attribution.

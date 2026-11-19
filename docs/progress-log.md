@@ -34,8 +34,7 @@
 **Blocked**: nothing.
 
 **Needs me**: see `docs/needs-me.md` (review/push the branch, make the video from the
-frames, optionally copy screenshots into `docs/img/`, toolchain paths in
-`.claude/settings.json`).
+frames, optionally copy screenshots into `docs/img/`).
 
 **Compiler kit**: MSVC, Visual Studio 18 Community (v145 toolset), Qt 6.12.0
 `msvc2022_64`, CMake + Ninja from the Qt installation. Clean rebuild at `/W4 /permissive-`:
@@ -87,3 +86,4 @@ powershell -ExecutionPolicy Bypass -File tools\zip-frames.ps1
 | 2026-11-19 05:11 | Final demo capture, frames zipped (224 frames, 40.5 MB). |
 | 2026-11-19 05:14 | design.md, README, phase1-explained.md; `deploy` target verified (deployed exe runs without PATH changes). |
 | 2026-11-19 05:16 | Secrets scan clean; clean rebuild with 0 warnings; summary written. |
+| 2026-11-19 | Machine-specific toolchain allow rules moved to git-ignored `.claude/settings.local.json`; `settings.json` keeps generic rules only. |

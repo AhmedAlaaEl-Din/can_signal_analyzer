@@ -1,0 +1,121 @@
+VERSION "1.0"
+
+
+NS_ :
+	NS_DESC_
+	CM_
+	BA_DEF_
+	BA_
+	VAL_
+	BA_DEF_DEF_
+	SIG_VALTYPE_
+
+BS_:
+
+BU_: BodyCtrl EngineCtrl TransCtrl BrakeCtrl PowerCtrl Cluster ClimateCtrl Gateway
+
+
+BO_ 200 VehicleDynamics: 8 BodyCtrl
+ SG_ VehicleSpeed : 0|16@1+ (0.01,0) [0|320] "km/h" Cluster,Gateway
+ SG_ SteeringAngle : 16|16@1- (0.1,0) [-780|780] "deg" Gateway
+ SG_ YawRate : 32|12@1- (0.05,0) [-100|100] "deg/s" Gateway
+ SG_ LateralAccel : 44|10@1- (0.02,0) [-10|10] "m/s2" Gateway
+ SG_ DynAliveCounter : 56|4@1+ (1,0) [0|15] "" Gateway
+
+BO_ 256 EngineData: 8 EngineCtrl
+ SG_ EngineSpeed : 7|16@0+ (0.25,0) [0|8000] "rpm" Cluster,TransCtrl
+ SG_ ThrottlePosition : 23|8@0+ (0.4,0) [0|100] "%" TransCtrl
+ SG_ EngineLoad : 31|8@0+ (0.5,0) [0|100] "%" TransCtrl
+ SG_ EngineTorque : 39|12@0- (0.5,0) [-500|1000] "Nm" TransCtrl
+ SG_ EngineState : 43|3@0+ (1,0) [0|4] "" Cluster
+ SG_ EngineAliveCounter : 63|4@0+ (1,0) [0|15] "" Gateway
+
+BO_ 288 EngineTemperatures: 4 EngineCtrl
+ SG_ CoolantTemp : 0|8@1+ (1,-40) [-40|215] "degC" Cluster
+ SG_ OilTemp : 8|8@1+ (1,-40) [-40|215] "degC" Cluster
+ SG_ IntakeAirTemp : 16|8@1+ (1,-40) [-40|215] "degC" Gateway
+ SG_ OilPressure : 24|8@1+ (0.04,0) [0|10] "bar" Cluster
+
+BO_ 416 TransmissionStatus: 4 TransCtrl
+ SG_ GearLever : 0|4@1+ (1,0) [0|4] "" Cluster
+ SG_ CurrentGear : 4|4@1+ (1,0) [0|7] "" Cluster
+ SG_ TransOilTemp : 8|8@1+ (1,-40) [-40|215] "degC" Gateway
+ SG_ ShiftInProgress : 16|1@1+ (1,0) [0|1] "" EngineCtrl
+ SG_ ConverterSlip : 17|10@1+ (1,0) [0|1000] "rpm" EngineCtrl
+
+BO_ 544 BrakeStatus: 3 BrakeCtrl
+ SG_ BrakePedalPressed : 0|1@1+ (1,0) [0|1] "" EngineCtrl,BodyCtrl
+ SG_ ABSActive : 1|1@1+ (1,0) [0|1] "" Cluster
+ SG_ BrakePressure : 8|12@1+ (0.1,0) [0|250] "bar" Gateway
+
+BO_ 752 BatteryStatus: 6 PowerCtrl
+ SG_ BatteryVoltage : 0|12@1+ (0.01,0) [0|40.95] "V" Cluster,Gateway
+ SG_ BatteryCurrent : 12|12@1- (0.1,0) [-204.8|204.7] "A" Gateway
+ SG_ StateOfCharge : 24|8@1+ (0.5,0) [0|100] "%" Cluster
+ SG_ BatteryTemp : 32|8@1+ (1,-40) [-40|100] "degC" Gateway
+ SG_ ChargingState : 40|2@1+ (1,0) [0|3] "" Cluster
+
+BO_ 800 BodyStatus: 2 BodyCtrl
+ SG_ DoorOpenDriver : 0|1@1+ (1,0) [0|1] "" Cluster
+ SG_ DoorOpenPassenger : 1|1@1+ (1,0) [0|1] "" Cluster
+ SG_ TrunkOpen : 2|1@1+ (1,0) [0|1] "" Cluster
+ SG_ HeadlightMode : 8|2@1+ (1,0) [0|3] "" Cluster
+ SG_ TurnIndicator : 10|2@1+ (1,0) [0|3] "" Cluster
+ SG_ WiperMode : 12|2@1+ (1,0) [0|3] "" Cluster
+
+BO_ 1008 TripComputer: 8 Cluster
+ SG_ TripPage M : 0|8@1+ (1,0) [0|2] "" Gateway
+ SG_ Odometer m0 : 8|32@1+ (0.1,0) [0|400000000] "km" Gateway
+ SG_ FuelLevel m1 : 8|8@1+ (0.4,0) [0|100] "%" Gateway
+ SG_ AvgConsumption m1 : 16|16@1+ (0.01,0) [0|50] "l/100km" Gateway
+ SG_ RangeEstimate m2 : 8|16@1+ (1,0) [0|2000] "km" Gateway
+ SG_ TripDistance m2 : 24|24@1+ (0.01,0) [0|100000] "km" Gateway
+
+BO_ 2451365954 ClimateSensors: 4 ClimateCtrl
+ SG_ AmbientTemp : 0|11@1+ (0.125,-40) [-40|215] "degC" Cluster
+ SG_ CabinTemp : 11|11@1+ (0.125,-40) [-40|215] "degC" Cluster
+ SG_ Humidity : 24|8@1+ (0.5,0) [0|100] "%" Cluster
+
+
+CM_ "Invented demo database for CAN Analyzer. Not based on any real vehicle, supplier or specification.";
+CM_ BO_ 200 "Vehicle motion as seen by the body controller.";
+CM_ SG_ 200 VehicleSpeed "Vehicle speed over ground.";
+CM_ SG_ 200 SteeringAngle "Steering wheel angle, positive to the left.";
+CM_ SG_ 200 DynAliveCounter "Increments with every frame; wraps after 15.";
+CM_ BO_ 256 "Engine status, Motorola byte order.";
+CM_ SG_ 256 EngineSpeed "Crankshaft speed.";
+CM_ SG_ 256 EngineTorque "Indicated torque; negative while engine braking.";
+CM_ SG_ 288 CoolantTemp "Engine coolant temperature. Warms up slowly
+after a cold start.";
+CM_ SG_ 416 CurrentGear "Engaged gear; 0 = neutral, 7 = reverse.";
+CM_ SG_ 544 BrakePressure "Hydraulic pressure at the master cylinder.";
+CM_ SG_ 752 BatteryCurrent "Positive when charging.";
+CM_ BO_ 1008 "Multiplexed trip computer pages selected by TripPage.";
+CM_ BO_ 2451365954 "Extended (29-bit) identifier example.";
+
+BA_DEF_ BO_  "GenMsgCycleTime" INT 0 10000;
+BA_DEF_DEF_  "GenMsgCycleTime" 100;
+BA_ "GenMsgCycleTime" BO_ 200 10;
+BA_ "GenMsgCycleTime" BO_ 256 10;
+BA_ "GenMsgCycleTime" BO_ 288 100;
+BA_ "GenMsgCycleTime" BO_ 416 20;
+BA_ "GenMsgCycleTime" BO_ 544 20;
+BA_ "GenMsgCycleTime" BO_ 752 100;
+BA_ "GenMsgCycleTime" BO_ 800 100;
+BA_ "GenMsgCycleTime" BO_ 1008 500;
+BA_ "GenMsgCycleTime" BO_ 2451365954 1000;
+
+VAL_ 256 EngineState 0 "Off" 1 "Cranking" 2 "Running" 3 "Stalled" 4 "Fault" ;
+VAL_ 416 GearLever 0 "P" 1 "R" 2 "N" 3 "D" 4 "S" ;
+VAL_ 416 CurrentGear 0 "Neutral" 7 "Reverse" ;
+VAL_ 416 ShiftInProgress 0 "No" 1 "Yes" ;
+VAL_ 544 BrakePedalPressed 0 "Released" 1 "Pressed" ;
+VAL_ 544 ABSActive 0 "Inactive" 1 "Active" ;
+VAL_ 752 ChargingState 0 "Idle" 1 "Charging" 2 "Discharging" 3 "Fault" ;
+VAL_ 800 DoorOpenDriver 0 "Closed" 1 "Open" ;
+VAL_ 800 DoorOpenPassenger 0 "Closed" 1 "Open" ;
+VAL_ 800 TrunkOpen 0 "Closed" 1 "Open" ;
+VAL_ 800 HeadlightMode 0 "Off" 1 "Parking" 2 "Low beam" 3 "High beam" ;
+VAL_ 800 TurnIndicator 0 "Off" 1 "Left" 2 "Right" 3 "Hazard" ;
+VAL_ 800 WiperMode 0 "Off" 1 "Interval" 2 "Slow" 3 "Fast" ;
+VAL_ 1008 TripPage 0 "Odometer" 1 "Fuel" 2 "Trip" ;

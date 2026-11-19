@@ -101,7 +101,7 @@ private slots:
             QVERIFY2(std::abs(got - expected) <= std::max(2.0, expected * 0.03),
                      qPrintable(QStringLiteral("id %1: %2 vs %3").arg(m.id, 0, 16).arg(got).arg(expected)));
         }
-        QVERIFY(std::abs(SimulatorEngine::nominalRate() - 366.0) < 0.01);
+        QVERIFY(std::abs(SimulatorEngine::rawNominalRate() - 366.0) < 0.01);
     }
 
     void targetRateIsHonoured()

@@ -110,7 +110,7 @@ void CaptureSession::setBurstsEnabled(bool enabled)
 
 double CaptureSession::nominalRate() const
 {
-    return SimulatorEngine::nominalRate();
+    return SimulatorEngine::rawNominalRate();
 }
 
 QString CaptureSession::sourceDescription() const

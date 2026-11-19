@@ -65,10 +65,10 @@ private:
     std::vector<CanFrame> m_scratch;
 };
 
-SimulatedSource::SimulatedSource(std::uint64_t seed, QObject *parent)
+SimulatedSource::SimulatedSource(std::uint64_t seed, SimulatorEngine::Mode mode, QObject *parent)
     : FrameSource(parent)
     , m_seed(seed)
-    , m_engine(std::make_shared<SimulatorEngine>(seed))
+    , m_engine(std::make_shared<SimulatorEngine>(seed, mode))
     , m_mutex(std::make_shared<QMutex>())
 {
     qRegisterMetaType<can::CanFrameBatch>("can::CanFrameBatch");
@@ -81,12 +81,62 @@ SimulatedSource::~SimulatedSource()
 
 bool SimulatedSource::isRunning() const
 {
-    return m_thread != nullptr;
+    return m_thread != nullptr || m_manualRunning;
+}
+
+bool SimulatedSource::vehicleMode() const
+{
+    QMutexLocker lock(m_mutex.get());
+    return m_engine->mode() == SimulatorEngine::Mode::Vehicle;
+}
+
+void SimulatedSource::setVehicleMode(bool vehicle)
+{
+    {
+        QMutexLocker lock(m_mutex.get());
+        const auto mode = vehicle ? SimulatorEngine::Mode::Vehicle : SimulatorEngine::Mode::Raw;
+        if (m_engine->mode() == mode)
+            return;
+        m_engine->setMode(mode);
+    }
+    emit modeChanged();
+}
+
+double SimulatedSource::nominalRate() const
+{
+    QMutexLocker lock(m_mutex.get());
+    return m_engine->nominalRate();
+}
+
+void SimulatedSource::setManualClock(bool manual)
+{
+    if (isRunning())
+        return;
+    m_manual = manual;
+}
+
+std::int64_t SimulatedSource::currentTimeUs() const
+{
+    QMutexLocker lock(m_mutex.get());
+    return m_engine->currentTimeUs();
+}
+
+void SimulatedSource::stepTo(std::int64_t timeUs)
+{
+    if (!m_manualRunning)
+        return;
+    std::vector<CanFrame> frames;
+    {
+        QMutexLocker lock(m_mutex.get());
+        m_engine->advanceTo(timeUs, frames);
+    }
+    if (!frames.empty())
+        emit framesReady(CanFrameBatch(frames.begin(), frames.end()));
 }
 
 QString SimulatedSource::description() const
 {
-    return QStringLiteral("Simulator · seed 0x%1").arg(QString::number(m_seed, 16).toUpper());
+    return QStringLiteral("%1 · seed 0x%2").arg(vehicleMode() ? QStringLiteral("Demo vehicle") : QStringLiteral("Raw patterns"), QString::number(m_seed, 16).toUpper());
 }
 
 int SimulatedSource::targetRate() const
@@ -125,8 +175,13 @@ void SimulatedSource::setBurstsEnabled(bool enabled)
 
 void SimulatedSource::start()
 {
-    if (m_thread)
+    if (isRunning())
         return;
+    if (m_manual) {
+        m_manualRunning = true;
+        emit runningChanged(true);
+        return;
+    }
     m_thread = new QThread(this);
     m_thread->setObjectName(QStringLiteral("SimulatorThread"));
     auto *worker = new SimWorker(m_engine, m_mutex);
@@ -141,6 +196,11 @@ void SimulatedSource::start()
 
 void SimulatedSource::stop()
 {
+    if (m_manualRunning) {
+        m_manualRunning = false;
+        emit runningChanged(false);
+        return;
+    }
     if (!m_thread)
         return;
     if (m_worker)

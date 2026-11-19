@@ -1,5 +1,8 @@
 #include "simulatorengine.h"
 
+#include "dbc.h"
+#include "vehiclemodel.h"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -11,7 +14,7 @@ namespace {
 using P = SimulatorEngine::Pattern;
 
 // All IDs and names are invented for this project.
-const std::vector<SimulatorEngine::MessageDef> kMessages = {
+const std::vector<SimulatorEngine::RawMessageDef> kMessages = {
     {0x0A0, false, 10, 2, P::Counter, 1, "SyncPulse"},
     {0x123, false, 10, 8, P::Sine, 1, "MotorDemand"},
     {0x18F, false, 20, 8, P::RandomWalk, 1, "WheelTicks"},
@@ -39,33 +42,77 @@ void put16(CanFrame &f, int offset, double value)
 }
 } // namespace
 
-SimulatorEngine::SimulatorEngine(std::uint64_t seed)
+SimulatorEngine::SimulatorEngine(std::uint64_t seed, Mode mode)
     : m_seed(seed)
+    , m_mode(mode)
     , m_rng(seed)
-    , m_state(kMessages.size())
+    , m_vehicle(std::make_unique<VehicleModel>(seed))
 {
-    for (auto &s : m_state) {
-        for (auto &w : s.walk)
-            w = 96.0 + m_rng.range(0, 64);
-        s.flags = static_cast<std::uint8_t>(m_rng.range(0, 255));
-    }
-    reschedulePeriods();
-    // Stagger start offsets so periodic messages do not all collide at t = 0.
-    for (auto &s : m_state)
-        s.nextDueUs = m_rng.range(1, static_cast<int>(s.periodUs));
+    buildSlots(false);
     m_nextBurstUs = static_cast<std::int64_t>(kBurstIntervalMs) * 1000;
 }
 
-const std::vector<SimulatorEngine::MessageDef> &SimulatorEngine::messages()
+SimulatorEngine::~SimulatorEngine() = default;
+
+void SimulatorEngine::buildSlots(bool resume)
+{
+    m_state.clear();
+    if (m_mode == Mode::Raw) {
+        m_state.resize(kMessages.size());
+        for (std::size_t i = 0; i < m_state.size(); ++i) {
+            auto &s = m_state[i];
+            s.nominalPeriodMs = kMessages[i].periodMs;
+            for (auto &w : s.walk)
+                w = 96.0 + m_rng.range(0, 64);
+            s.flags = static_cast<std::uint8_t>(m_rng.range(0, 255));
+        }
+    } else {
+        if (!m_db)
+            m_db = demoDatabase();
+        for (std::size_t i = 0; i < m_db->messages.size(); ++i) {
+            const int cycle = m_db->messages[i].cycleTimeMs;
+            if (cycle <= 0)
+                continue;
+            MessageState s;
+            s.nominalPeriodMs = cycle;
+            s.dbIndex = static_cast<int>(i);
+            m_state.push_back(s);
+        }
+    }
+    reschedulePeriods();
+    // Stagger start offsets so periodic messages do not all collide.
+    const std::int64_t base = resume ? m_nowUs : 0;
+    for (auto &s : m_state)
+        s.nextDueUs = base + m_rng.range(1, static_cast<int>(s.periodUs));
+}
+
+void SimulatorEngine::setMode(Mode mode)
+{
+    if (mode == m_mode)
+        return;
+    m_mode = mode;
+    m_burstRemaining = 0;
+    buildSlots(true);
+}
+
+const std::vector<SimulatorEngine::RawMessageDef> &SimulatorEngine::messages()
 {
     return kMessages;
 }
 
-double SimulatorEngine::nominalRate()
+double SimulatorEngine::rawNominalRate()
 {
     double rate = 0;
     for (const auto &m : kMessages)
         rate += 1000.0 / m.periodMs;
+    return rate;
+}
+
+double SimulatorEngine::nominalRate() const
+{
+    double rate = 0;
+    for (const auto &s : m_state)
+        rate += 1000.0 / s.nominalPeriodMs;
     return rate;
 }
 
@@ -102,7 +149,7 @@ void SimulatorEngine::reschedulePeriods()
 {
     const double scale = m_targetRate > 0 ? m_targetRate / nominalRate() : 1.0;
     for (std::size_t i = 0; i < m_state.size(); ++i) {
-        const double us = kMessages[i].periodMs * 1000.0 / scale;
+        const double us = m_state[i].nominalPeriodMs * 1000.0 / scale;
         m_state[i].periodUs = std::max<std::int64_t>(100, std::llround(us));
     }
 }
@@ -114,7 +161,8 @@ std::int64_t SimulatorEngine::jitterUs(std::int64_t periodUs)
     return m_rng.range(-span, span);
 }
 
-std::size_t SimulatorEngine::advanceTo(std::int64_t endUs, std::vector<CanFrame> &out)
+std::size_t SimulatorEngine::advanceTo(std::int64_t endUs, std::vector<CanFrame> &out,
+                                      std::vector<Intended> *intended)
 {
     std::size_t produced = 0;
     for (;;) {
@@ -128,7 +176,7 @@ std::size_t SimulatorEngine::advanceTo(std::int64_t endUs, std::vector<CanFrame>
             }
         }
         bool burstEvent = false;
-        if (m_burstsEnabled) {
+        if (m_burstsEnabled && m_mode == Mode::Raw) {
             const std::int64_t burstDue = m_burstRemaining > 0 ? m_nextBurstFrameUs : m_nextBurstUs;
             if (burstDue < best) {
                 best = burstDue;
@@ -148,8 +196,21 @@ std::size_t SimulatorEngine::advanceTo(std::int64_t endUs, std::vector<CanFrame>
             --m_burstRemaining;
             m_nextBurstFrameUs = best + kBurstSpacingUs;
         } else {
-            out.push_back(makeFrame(bestIndex, best));
             auto &s = m_state[bestIndex];
+            if (m_mode == Mode::Raw) {
+                out.push_back(makeFrame(bestIndex, best));
+            } else {
+                CanFrame f;
+                f.timestampUs = best;
+                f.channel = 1;
+                m_vehicle->advanceTo(best);
+                Intended values;
+                m_vehicle->fill(m_db->messages[static_cast<std::size_t>(s.dbIndex)], f,
+                                intended ? &values : nullptr);
+                out.push_back(f);
+                if (intended)
+                    intended->push_back(std::move(values));
+            }
             s.nextDueUs = best + std::max<std::int64_t>(50, s.periodUs + jitterUs(s.periodUs));
         }
         ++produced;
@@ -160,7 +221,7 @@ std::size_t SimulatorEngine::advanceTo(std::int64_t endUs, std::vector<CanFrame>
 
 CanFrame SimulatorEngine::makeFrame(std::size_t index, std::int64_t tUs)
 {
-    const MessageDef &def = kMessages[index];
+    const RawMessageDef &def = kMessages[index];
     MessageState &s = m_state[index];
     CanFrame f;
     f.id = def.id;

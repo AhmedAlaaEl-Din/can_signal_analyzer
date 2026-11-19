@@ -105,3 +105,18 @@ Findings → changes:
 4. Dark-mode change highlight looked muddy (amber over blue-grey). → Lower alpha in dark.
 5. Verified: no layout breakage at 960×600 (toolbar, filter bar, chips and both tables fit),
    friendly inline filter error, clear empty states.
+
+## Housekeeping
+- **`design_refs/` does not exist**, so no reference images were used; the look was derived
+  from first principles (see `docs/design.md`).
+- **`.claude/settings.json` contains the full toolchain paths** in its allow rules, because
+  permission rules cannot read environment variables and the brief asked for those commands
+  to be allowed. This is agent tooling config, not build config; build files use `QT_ROOT`.
+- **Demo timing:** the scene runs at `--rate 2000` for the delivered frames, to show the
+  UI under the maximum specified load. The default interactive rate is 1000 fr/s; the app
+  starts stopped, showing the empty state.
+- **Test isolation:** each test's PATH and `QT_QPA_PLATFORM=offscreen` are set via the CTest
+  `ENVIRONMENT_MODIFICATION` property only.
+- **Line endings:** `.gitattributes` normalises text to LF (batch files CRLF).
+- The shell wrapper used during the session mis-parsed apostrophes inside heredocs; files
+  were written with the editor tool instead (no impact on the project).

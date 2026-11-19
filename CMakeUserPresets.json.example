@@ -1,0 +1,22 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "local-release",
+      "displayName": "Local release (MSVC + Qt msvc2022_64)",
+      "inherits": "release",
+      "environment": {
+        "QT_ROOT": "C:/path/to/Qt/6.x.y/msvc2022_64"
+      },
+      "cacheVariables": {
+        "CMAKE_MAKE_PROGRAM": "C:/path/to/Qt/Tools/Ninja/ninja.exe"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "local-release", "configurePreset": "local-release" }
+  ],
+  "testPresets": [
+    { "name": "local-release", "configurePreset": "local-release", "output": { "outputOnFailure": true } }
+  ]
+}

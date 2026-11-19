@@ -38,7 +38,7 @@ public:
 
     static constexpr int kFps = 12;
     static constexpr int kDemoDurationMs = 45000;
-    static constexpr int kCheckDurationMs = 24000;
+    static constexpr int kCheckDurationMs = 25000;
     static constexpr int kJpegQuality = 80; // phase 3 plots: 85 gave 62.6 MB (see decisions)
 
     DemoDirector(Mode mode, QQuickWindow *window, can::CaptureSession *session,

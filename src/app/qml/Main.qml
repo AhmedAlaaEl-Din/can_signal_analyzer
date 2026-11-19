@@ -231,6 +231,8 @@ ApplicationWindow {
             Session.plotModel.setThreshold(Number(p[0]), Number(p[1]), Number(p[2]))
             break
         }
+        case "plotExportPng": plotsPage.exportPng(arg); break
+        case "plotExportCsv": plotsPage.exportCsv(arg); break
         case "plotHover": plotsPage.hoverX = Number(arg) < 0 ? -1 : Number(arg) * plotsPage.plotWidth; break
         default: console.warn("unknown demo action", name)
         }

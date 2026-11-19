@@ -223,6 +223,10 @@ void DemoDirector::buildCheckScript()
         act(QStringLiteral("plotCursors"), QStringLiteral("place"));
     });
     at(23.5, [this] { screenshot(QStringLiteral("min-size-plots-dark")); });
+    at(23.6, [this] {
+        act(QStringLiteral("plotExportPng"), QUrl::fromLocalFile(m_shotsDir.filePath(QStringLiteral("export-plot.png"))));
+        act(QStringLiteral("plotExportCsv"), QUrl::fromLocalFile(m_root.filePath(QStringLiteral("export-visible-range.csv"))));
+    });
 }
 
 void DemoDirector::start()

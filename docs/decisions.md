@@ -226,3 +226,107 @@ Findings → changes:
 2. Verified: bad-DBC banner with line numbers, no-database empty state with actions,
    multiplexed TripComputer decoding only the current page, wide window, raw mode.
 3. Final frames and screenshots were re-captured after this round.
+
+---
+
+# Phase 3: live signal plots
+
+## Simulator and sparkline fixes (from the phase 2 demo)
+- **Torque was clamped at 180 Nm, throttle/load flat.** Torque now follows
+  `throttle × full-load curve(rpm) − friction(rpm)` (engine braking when coasting in gear,
+  small positive at idle); load follows torque; the pedal varies while accelerating (eases off
+  near the target, small corrections) and while cruising (road load + grade); idle-air throttle
+  (~3 %) and residual brake pressure (~0.4 bar) are never exactly 0; steering amplitude shrinks
+  with speed so lateral acceleration never clips; slow signals (SoC, fuel, battery temperature,
+  ambient) move visibly within a minute (fuel use is demo-accelerated).
+- **Tests:** every analog signal (no value table, has a unit, ≥ 8 bits, not a counter) must
+  vary by ≥ 2 quantisation steps over 60 s and never sit at a DBC range limit for > 6 s;
+  throttle/torque/load must change within every 4 s window.
+- **Sparklines** scale to the samples inside the visible window only (+8 % margin); the
+  min/max band for fast counters is unchanged.
+
+## Time-series store
+- One growable power-of-two ring per signal (`TimeSeries`), time-ordered, trimmed to the
+  configured history (default 10 min). Memory follows the real rate instead of a guessed
+  capacity.
+- **Decimation:** `decimate(t0, t1, columns)` returns per-pixel-column `count/min/max/first/
+  last`. Every sample lands in exactly one column, so a one-sample spike is never lost.
+  When a column holds ≥ 128 samples, 64-sample block summaries are used instead of raw
+  samples (blocks are only used when fully inside the data and inside one column).
+  Measured: 8 signals × 60k samples → 1200 columns in 3.3 ms per frame.
+- Fed by `SignalListModel` (decoded values) once per 30 ms batch, so pause/resume and clear
+  behave exactly like the other views (pause parks frames; nothing is lost).
+
+## Plot engine choice
+- **Qt Graphs is not installed** on the development machine (only Qt Charts), and installing
+  modules was not allowed. The benchmark therefore compares the custom scene-graph item
+  against **Qt Charts**, the installed alternative. See needs-me for a Qt Graphs comparison.
+- Workload: 8 signals × 1000 Hz (8000 samples/s, the decoded output of ~2000 frames/s),
+  10 s window = 10,000 visible points per signal, 4 lanes, 1280 × 800 (DPR 1.25), 4× MSAA,
+  Direct3D 11. Commands: `can_analyzer --plot-bench <file>`, `can_charts_bench <file>`.
+
+| Engine | fps | p50 | p95 | CPU per frame |
+|---|---|---|---|---|
+| Custom scene graph, min/max decimation (used) | **60.0** | 16.7 ms | 17.8 ms | 1.9 ms prep + 1.5 ms geometry |
+| Custom scene graph, all 80k raw points | 51.5 | 17.2 ms | 32.0 ms | 1.5 + 8.5 ms |
+| Qt Charts, useOpenGL: true | 36.2 | 28.6 ms | 36.2 ms | 10.1 ms feeding series |
+| Qt Charts, raster | 2.7 | 426 ms | 439 ms | 233 ms feeding series |
+
+  → **Custom scene-graph item** (`PlotCanvas`): vsync-locked 60 fps with headroom, full
+  control over the look (gradient fill, min/max band, dash cue, steps), no extra module.
+- **Anti-aliasing:** thick lines are triangle strips with miter joins (dashes as quads);
+  smooth edges come from 4× MSAA on the window (default surface format) rather than
+  per-vertex feathering. Line width 1.75 px.
+- Data preparation (store access, decimation, autoscale ranges) runs in `updatePolish()` on
+  the GUI thread; `updatePaintNode()` only builds geometry.
+- **Smooth follow-live:** data arrives every 30 ms but the view should move every frame. A
+  `FrameAnimation` advances a "display now" by the frame time, never past the newest sample,
+  snapping only if it falls > 80 ms behind.
+
+## Plot UI decisions
+- Lanes share one time axis; each lane groups its series **by unit**: the first unit uses the
+  left axis (and the grid), a second unit gets its own scale on a right axis (labels tinted
+  like that series), further units are scaled on their own. Enumerations form their own
+  group with every integer state labelled (value-table text where available).
+- Second visual cue: the second series in a lane is dashed by default; clicking the line
+  sample in a legend chip toggles solid/dashed.
+- Measurement readout lives in a slim bar above the plot (not over the data).
+- Picker on the Plots tab supports click and drag-and-drop (dragging from the Signals tab is
+  impossible because the two tabs are never visible together; the Signals tab and the detail
+  panel have a Plot button instead).
+- PNG export grabs the plot card (`grabToImage`); CSV exports the visible time range, one
+  column per visible signal, one row per distinct sample time.
+- JPEG quality for the plots demo: **80** (85 produced 62.6 MB > 60 MB budget); final
+  541 frames = 53.4 MB, zip 40.6 MB.
+
+## Design review — Phase 3, round 1
+1. Signal picker was empty (built before the plot model had the database). → Picker derived
+   from a binding on the signal count; the plot model is updated before the signal model.
+2. Speed and rpm shared one y-axis (speed flattened, axis labelled km/h but showing rpm). →
+   Per-unit scaling with left/right axes, axis labels tinted per series.
+3. Enumerations showed only labelled states (Neutral, Reverse). → Every integer state is a tick.
+4. `setWindowSeconds` was called as a method (property setter) and `PlotCanvas.palette`
+   shadowed `QQuickItem::palette`. → Property assignment; renamed to `colors`.
+
+## Design review — Phase 3, round 2
+1. The cursor delta card covered the data, cursor B's handle and the right axis. → Moved to
+   a measurement bar above the plot card.
+2. Bottom tick labels collided with unit labels ("1500" over "rpm"). → Labels within 14 px of
+   the bottom edge are dropped.
+3. Lane controls overlapped the right axis labels. → Placed inside the plot region.
+4. Frames 62.6 MB. → JPEG quality 80.
+
+## Design review — Phase 3, round 3
+1. **Bug:** the real mouse leaked into the deterministic capture (crosshair at the physical
+   cursor position in every frame). → The director sets `demoMode` on the window; hover
+   handlers are disabled in demo mode.
+2. Demo threshold was outside the lane's left (throttle %) axis and invisible. → Demo uses a
+   throttle value; thresholds outside the range now show a badge pinned to the edge (▲/▼).
+3. **Bug:** cursor lines and the tooltip time did not follow scrolling (bindings calling
+   `xOfTime()`/`timeAtX()` had no dependency on the view range). → View range added to those
+   bindings.
+4. **Bug:** at the minimum window size (wall-clock run) the left axis stayed stale: a
+   `Behavior` retargeted every frame restarts at t = 0 and never advances. → Axis ranges ease
+   towards their targets in a per-lane `FrameAnimation` (exponential smoothing, τ = 90 ms).
+5. Verified: 960 × 600 Plots layout, empty states, PNG and CSV export from the app
+   (layout check), both themes. Final frames/screenshots re-captured after this round.

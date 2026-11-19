@@ -34,7 +34,7 @@
 **Blocked**: nothing.
 
 **Needs me**: see `docs/needs-me.md` (review/push the branch, make the video from the
-frames, optionally copy screenshots into `docs/img/`).
+frames).
 
 **Compiler kit**: MSVC, Visual Studio 18 Community (v145 toolset), Qt 6.12.0
 `msvc2022_64`, CMake + Ninja from the Qt installation. Clean rebuild at `/W4 /permissive-`:

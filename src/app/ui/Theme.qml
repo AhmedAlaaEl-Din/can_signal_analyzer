@@ -116,7 +116,7 @@ QtObject {
     readonly property color accentSubtle: alpha(accent, 0.12 + 0.04 * t)
     readonly property color focusRing: alpha(accent, 0.55)
     readonly property color shadow: Qt.rgba(0, 0, 0, light.shadow + (darkPalette.shadow - light.shadow) * t)
-    readonly property color highlightChange: alpha(warning, 0.15 + 0.07 * t)
+    readonly property color highlightChange: alpha(warning, 0.15 + 0.01 * t)
 
     function toneColor(tone) {
         switch (tone) {

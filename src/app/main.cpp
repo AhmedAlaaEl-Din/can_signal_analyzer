@@ -1,4 +1,5 @@
 #include "capturesession.h"
+#include "framemodel.h"
 #include "demodirector.h"
 #include "simulatedsource.h"
 
@@ -13,6 +14,7 @@
 #include <QTimer>
 #include <QtQml/qqmlextensionplugin.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <memory>
 
@@ -62,10 +64,15 @@ int main(int argc, char *argv[])
     const QCommandLineOption rateOption(QStringLiteral("rate"),
                                         QStringLiteral("Initial simulated rate in frames/s (0 = nominal)."),
                                         QStringLiteral("fps"), QStringLiteral("1000"));
-    parser.addOptions({demoOption, outOption, seedOption, rateOption});
+    const QCommandLineOption checkOption(QStringLiteral("layout-check"),
+                                         QStringLiteral("Capture edge-case screenshots (empty, minimum size, wide, errors)."));
+    const QCommandLineOption capacityOption(QStringLiteral("capacity"),
+                                            QStringLiteral("Trace ring-buffer capacity in frames."),
+                                            QStringLiteral("frames"), QString::number(can::FrameModel::kDefaultCapacity));
+    parser.addOptions({demoOption, checkOption, outOption, seedOption, rateOption, capacityOption});
     parser.process(app);
 
-    const bool demo = parser.isSet(demoOption);
+    const bool demo = parser.isSet(demoOption) || parser.isSet(checkOption);
     const QString evidenceDir = QDir(parser.value(outOption)).absolutePath();
     if (demo) {
         QDir().mkpath(evidenceDir);
@@ -90,6 +97,7 @@ int main(int argc, char *argv[])
     can::CaptureSession session(source);
     session.setTargetRate(parser.value(rateOption).toInt());
     session.setBurstsEnabled(true);
+    session.frameModel()->setCapacity(std::max(1000, parser.value(capacityOption).toInt()));
     qmlRegisterSingletonInstance("CanAnalyzer.Core", 1, 0, "Session", &session);
 
     QQmlApplicationEngine engine;
@@ -103,7 +111,9 @@ int main(int argc, char *argv[])
     std::unique_ptr<DemoDirector> director;
     if (demo && window) {
         window->resize(1280, 800);
-        director = std::make_unique<DemoDirector>(window, &session, evidenceDir);
+        const auto mode = parser.isSet(checkOption) ? DemoDirector::Mode::LayoutCheck
+                                                    : DemoDirector::Mode::Demo;
+        director = std::make_unique<DemoDirector>(mode, window, &session, evidenceDir);
         QObject::connect(director.get(), &DemoDirector::finished, &app, &QCoreApplication::quit,
                          Qt::QueuedConnection);
         // Give the window a moment to be exposed and laid out before the scene starts.

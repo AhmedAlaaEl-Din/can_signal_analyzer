@@ -19,6 +19,7 @@ qt_add_qml_module(can_analyzer
         qml/TracePage.qml
         qml/TraceRow.qml
         qml/MessagesPage.qml
+        qml/FloatingPill.qml
         qml/format.js
 )
 

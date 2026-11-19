@@ -56,7 +56,7 @@ Item {
                     layoutDirection: cell.modelData.align === "right" ? Qt.RightToLeft : Qt.LeftToRight
 
                     Text {
-                        text: cell.modelData.title.toUpperCase()
+                        text: cell.modelData.title
                         color: cell.active ? Theme.text : (hover.hovered && header.sortable ? Theme.textMuted : Theme.textFaint)
                         font.family: Theme.fontSans
                         font.pixelSize: Theme.type.caption

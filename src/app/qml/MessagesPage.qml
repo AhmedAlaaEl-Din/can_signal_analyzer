@@ -16,12 +16,12 @@ Item {
     // `key` values match MessageOverviewModel::Column
     readonly property var columns: [
         { title: qsTr("ID"), width: 104, align: "left", key: 0 },
-        { title: qsTr("Ch"), width: 28, align: "right", key: 1 },
+        { title: qsTr("CH"), width: 28, align: "right", key: 1 },
         { title: qsTr("DLC"), width: 32, align: "right", key: 2 },
-        { title: qsTr("Count"), width: 84, align: "right", key: 3 },
-        { title: qsTr("Period (ms)"), width: 92, align: "right", key: 4 },
-        { title: qsTr("Last seen (s)"), width: 104, align: "right", key: 5 },
-        { title: qsTr("Data"), width: 0, align: "left", key: 6 }
+        { title: qsTr("COUNT"), width: 84, align: "right", key: 3 },
+        { title: qsTr("PERIOD (ms)"), width: 92, align: "right", key: 4 },
+        { title: qsTr("LAST SEEN (s)"), width: 104, align: "right", key: 5 },
+        { title: qsTr("DATA"), width: 0, align: "left", key: 6 }
     ]
 
     opacity: active ? 1 : 0
@@ -63,6 +63,7 @@ Item {
             clip: true
             model: Session.overviewModel
             boundsBehavior: Flickable.StopAtBounds
+            bottomMargin: pill.shown ? 52 : 0
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
             // Smoothly slide rows when the sort order changes.
@@ -170,6 +171,7 @@ Item {
                                 id: byteCell
                                 required property int index
                                 readonly property bool present: index < row.bytes.length
+                                onPresentChanged: if (!present) { flashAnim.stop(); flash.opacity = 0 }
                                 width: 22
                                 height: parent.height
 
@@ -181,6 +183,7 @@ Item {
                                     radius: Theme.radius.sm
                                     color: Theme.highlightChange
                                     opacity: 0
+                                    visible: byteCell.present
                                 }
                                 Text {
                                     anchors.centerIn: parent
@@ -216,6 +219,13 @@ Item {
                     }
                 }
             }
+        }
+
+        FloatingPill {
+            id: pill
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: Theme.space.lg
         }
 
         EmptyState {

@@ -14,12 +14,12 @@ Item {
 
     readonly property int cellSpacing: 22
     readonly property var columns: [
-        { title: qsTr("Time (s)"), width: 104, align: "right" },
-        { title: qsTr("Ch"), width: 28, align: "right" },
+        { title: qsTr("TIME (s)"), width: 104, align: "right" },
+        { title: qsTr("CH"), width: 28, align: "right" },
         { title: qsTr("ID"), width: 104, align: "left" },
         { title: qsTr("Δt (ms)"), width: 72, align: "right" },
         { title: qsTr("DLC"), width: 32, align: "right" },
-        { title: qsTr("Data"), width: 0, align: "left" }
+        { title: qsTr("DATA"), width: 0, align: "left" }
     ]
 
     // Page transition: fade + short rise.
@@ -43,6 +43,7 @@ Item {
     function scrollUpBy(rows) {
         list.follow = false
         list.contentY = Math.max(list.originY, list.contentY - rows * Theme.size.row)
+        list.rememberAnchor()
     }
     function selectVisibleRow(offset) {
         const idx = list.indexAt(20, list.contentY + offset * Theme.size.row + Theme.size.row / 2)
@@ -190,16 +191,58 @@ Item {
                 property bool follow: true
                 property bool _programmatic: false
 
+                // Keep the last rows readable above the floating pill.
+                bottomMargin: pill.shown ? 52 : 0
+                onBottomMarginChanged: if (follow) Qt.callLater(scrollToEnd)
+
                 function atEnd() {
-                    return contentY + height >= contentHeight + originY - 2
+                    return contentY + height >= contentHeight + originY + bottomMargin - 2
                 }
                 function scrollToEnd() {
                     _programmatic = true
                     positionViewAtEnd()
+                    // positionViewAtEnd() ignores bottomMargin; include it so the
+                    // newest row stays visible above the floating pill.
+                    if (bottomMargin > 0)
+                        contentY = Math.max(contentY, contentHeight + originY + bottomMargin - height)
                     _programmatic = false
                 }
 
                 onCountChanged: if (follow) Qt.callLater(scrollToEnd)
+
+                // Detached view anchoring: remember the frame at the top of the
+                // view (by sequence number) and, after the ring buffer evicts
+                // older rows, put that same frame back at the top.
+                property real anchorSeq: -1
+                function rememberAnchor() {
+                    const idx = indexAt(20, contentY + 2)
+                    const item = idx >= 0 ? itemAtIndex(idx) : null
+                    anchorSeq = item ? item.seq : -1
+                }
+                function restoreAnchor() {
+                    if (follow || anchorSeq < 0)
+                        return
+                    const row = Math.max(0, Session.frameModel.rowForSeq(anchorSeq))
+                    _programmatic = true
+                    positionViewAtIndex(row, ListView.Beginning)
+                    _programmatic = false
+                    if (row === 0)
+                        rememberAnchor() // anchor itself was evicted: keep the oldest row
+                }
+                Connections {
+                    target: Session.frameModel
+                    function onRowsEvicted(count) {
+                        if (!list.follow)
+                            Qt.callLater(list.restoreAnchor)
+                    }
+                    // Once the ring buffer is full every batch removes as many rows
+                    // as it adds, so `count` stops changing: follow on inserts.
+                    function onRowsInserted() {
+                        if (list.follow)
+                            Qt.callLater(list.scrollToEnd)
+                    }
+                }
+                onFollowChanged: if (!follow) Qt.callLater(rememberAnchor)
                 onContentYChanged: {
                     if (_programmatic)
                         return
@@ -207,6 +250,8 @@ Item {
                         follow = true
                     else if (follow && (dragging || flicking || vbar.pressed) && !atEnd())
                         follow = false
+                    if (!follow)
+                        rememberAnchor()
                 }
                 onHeightChanged: if (follow) Qt.callLater(scrollToEnd)
 
@@ -256,25 +301,14 @@ Item {
                 shortcutLabel: Session.filterActive ? qsTr("to reset the filter") : qsTr("to start")
             }
 
-            // Floating "jump to live" pill
-            Button {
-                id: livePill
-                variant: "primary"
-                iconName: "arrow-down"
-                text: qsTr("Jump to live")
+            // Floating pill: "paused, N waiting" or "jump to live"
+            FloatingPill {
+                id: pill
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: Theme.space.lg
-                height: 30
-                opacity: !list.follow && list.count > 0 ? 1 : 0
-                visible: opacity > 0.01
-                scale: !list.follow ? 1 : 0.92
-                Behavior on opacity { NumberAnimation { duration: Theme.motion.normal; easing.type: Theme.motion.easing } }
-                Behavior on scale { NumberAnimation { duration: Theme.motion.normal; easing.type: Theme.motion.easing } }
-                onClicked: page.jumpToLive()
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Resume auto-scroll  (End)")
-                ToolTip.delay: 600
+                detached: !list.follow && list.count > 0
+                onJumpRequested: page.jumpToLive()
             }
         }
     }

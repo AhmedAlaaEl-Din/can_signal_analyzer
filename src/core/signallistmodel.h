@@ -59,10 +59,15 @@ public:
         BitInfoRole,        // "start 0 · 16 bit · Intel"
     };
 
+    // One 40 ms bucket: the newest value plus the min/max seen inside the
+    // bucket (so fast-changing signals such as counters draw an honest band
+    // instead of an aliased zig-zag).
     struct Sample
     {
         std::int64_t timeUs;
         double value;
+        double min;
+        double max;
     };
 
     explicit SignalListModel(QObject *parent = nullptr);

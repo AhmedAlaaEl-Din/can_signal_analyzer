@@ -13,10 +13,11 @@ Item {
     property real selectedSeq: -1
 
     readonly property int cellSpacing: 22
+    readonly property bool showNames: ApplicationWindow.window ? ApplicationWindow.window.showNames : false
     readonly property var columns: [
         { title: qsTr("TIME (s)"), width: 104, align: "right" },
         { title: qsTr("CH"), width: 28, align: "right" },
-        { title: qsTr("ID"), width: 104, align: "left" },
+        { title: showNames ? qsTr("MESSAGE") : qsTr("ID"), width: showNames ? 168 : 104, align: "left" },
         { title: qsTr("Δt (ms)"), width: 72, align: "right" },
         { title: qsTr("DLC"), width: 32, align: "right" },
         { title: qsTr("DATA"), width: 0, align: "left" }
@@ -282,6 +283,8 @@ Item {
                     cellSpacing: page.cellSpacing
                     selected: seq === page.selectedSeq
                     animateIn: page.fadeNewRows
+                    showNames: page.showNames
+                    decoded: selected && Session.database.loaded ? Session.frameModel.decodedSignals(index) : []
                     onClicked: page.selectedSeq = (selected ? -1 : seq)
                 }
             }

@@ -100,16 +100,27 @@ Rectangle {
 
         // Source settings
         ComboBox {
+            id: sourceBox
+            prefix: qsTr("Source")
+            Layout.preferredWidth: 176
+            model: [qsTr("Demo vehicle"), qsTr("Raw patterns")]
+            currentIndex: Session.vehicleMode ? 0 : 1
+            onActivated: (index) => Session.vehicleMode = (index === 0)
+            ToolTip.visible: hovered && !popup.visible
+            ToolTip.text: qsTr("Demo vehicle matches demo_vehicle.dbc; raw patterns are synthetic bytes")
+            ToolTip.delay: 600
+        }
+        ComboBox {
             id: rateBox
             prefix: qsTr("Rate")
-            Layout.preferredWidth: 168
+            Layout.preferredWidth: 152
             textRole: "label"
             valueRole: "rate"
             model: [
-                { label: qsTr("Nominal ≈%1/s").arg(Math.round(Session.nominalRate)), rate: 0 },
-                { label: qsTr("500 frames/s"), rate: 500 },
-                { label: qsTr("1000 frames/s"), rate: 1000 },
-                { label: qsTr("2000 frames/s"), rate: 2000 }
+                { label: qsTr("≈%1/s (nominal)").arg(Math.round(Session.nominalRate)), rate: 0 },
+                { label: qsTr("500/s"), rate: 500 },
+                { label: qsTr("1000/s"), rate: 1000 },
+                { label: qsTr("2000/s"), rate: 2000 }
             ]
             Component.onCompleted: currentIndex = indexOfValue(Session.targetRate)
             onActivated: Session.targetRate = currentValue
@@ -122,6 +133,7 @@ Rectangle {
             ToolTip.delay: 600
         }
         Switch {
+            visible: !Session.vehicleMode
             text: qsTr("Bursts")
             checked: Session.burstsEnabled
             onToggled: Session.burstsEnabled = checked

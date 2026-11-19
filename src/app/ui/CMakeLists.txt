@@ -20,6 +20,7 @@ qt_add_qml_module(canui
         Kbd.qml
         Divider.qml
         ExtTag.qml
+        SegmentedToggle.qml
     RESOURCES
         ${CAN_UI_ICONS}
 )

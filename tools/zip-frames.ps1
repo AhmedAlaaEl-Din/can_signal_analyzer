@@ -1,4 +1,4 @@
-# Packs the demo frames (evidence/frames/*.png) into evidence/frames.zip.
+# Packs the demo frames (evidence/frames/frame_*.jpg or .png) into evidence/frames.zip.
 # Uses only the built-in Compress-Archive cmdlet. Run from the repository root:
 #   powershell -ExecutionPolicy Bypass -File tools/zip-frames.ps1
 $ErrorActionPreference = 'Stop'
@@ -9,7 +9,7 @@ $zip = Join-Path $root 'evidence\frames.zip'
 if (-not (Test-Path $frames)) {
     Write-Error "No frames found. Run the app with --demo first."
 }
-$files = Get-ChildItem $frames -Filter 'frame_*.png' | Sort-Object Name
+$files = Get-ChildItem $frames -Include 'frame_*.jpg','frame_*.png' -Recurse | Sort-Object Name
 if ($files.Count -eq 0) {
     Write-Error "evidence/frames is empty. Run the app with --demo first."
 }

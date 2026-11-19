@@ -3,6 +3,8 @@ import CanUi
 
 // One trace line. Kept deliberately light: a few Text items, no layouts,
 // so thousands of rows per second can stream through the pool of delegates.
+// The selected row expands (when a database is loaded) to show its decoded
+// signals.
 Item {
     id: row
 
@@ -17,14 +19,19 @@ Item {
     required property real ordinal
     required property bool fresh
     required property string delta
+    required property string messageName
 
     property var columns: []
     property int cellSpacing: 20
     property bool selected: false
     property bool animateIn: true
+    property bool showNames: false
+    property var decoded: []        // set for the expanded (selected) row
     signal clicked()
 
-    height: Theme.size.row
+    readonly property bool expanded: selected && decoded.length > 0
+    readonly property int lineHeight: Theme.size.row
+    height: lineHeight + (expanded ? detail.implicitHeight + Theme.space.sm : 0)
 
     function maybeFadeIn() {
         if (fresh && animateIn) {
@@ -56,7 +63,7 @@ Item {
     Row {
         id: content
         x: Theme.space.lg
-        height: parent.height
+        height: row.lineHeight
         spacing: row.cellSpacing
 
         NumberAnimation {
@@ -92,18 +99,21 @@ Item {
         Item {
             width: row.columns[2].width
             height: parent.height
+            readonly property bool named: row.showNames && row.messageName.length > 0
             Text {
                 id: idText
                 height: parent.height
-                text: row.frameId
+                width: Math.min(implicitWidth, parent.width - (parent.named ? 0 : 36))
+                elide: Text.ElideRight
+                text: parent.named ? row.messageName : row.frameId
                 verticalAlignment: Text.AlignVCenter
                 color: row.selected ? Theme.accentText : Theme.text
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.type.mono
-                font.weight: Font.DemiBold
+                font.family: parent.named ? Theme.fontSans : Theme.fontMono
+                font.pixelSize: parent.named ? Theme.type.body : Theme.type.mono
+                font.weight: parent.named ? Font.Medium : Font.DemiBold
             }
             ExtTag {
-                visible: row.extended
+                visible: row.extended && !parent.named
                 anchors.left: idText.right
                 anchors.leftMargin: 6
                 anchors.verticalCenter: parent.verticalCenter
@@ -138,5 +148,16 @@ Item {
             font.pixelSize: Theme.type.mono
             font.wordSpacing: 3
         }
+    }
+
+    // Decoded signals of the selected frame.
+    DecodedGrid {
+        id: detail
+        visible: row.expanded
+        x: Theme.space.lg + row.columns[0].width + row.columns[1].width + 2 * row.cellSpacing
+        y: row.lineHeight
+        width: row.width - x - Theme.space.lg
+        signalList: row.expanded ? row.decoded : []
+        title: row.showNames || row.messageName.length === 0 ? "" : row.messageName
     }
 }

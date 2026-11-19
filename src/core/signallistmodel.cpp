@@ -281,15 +281,19 @@ void SignalListModel::pushSample(SignalState &s, std::int64_t t, double v)
         const int lastIdx = (s.ringStart + s.ringSize - 1) % kHistoryCapacity;
         Sample &last = s.ring[static_cast<std::size_t>(lastIdx)];
         if (t / kSampleBucketUs == last.timeUs / kSampleBucketUs) {
-            last = {t, v}; // same bucket: keep the newest value
+            // same bucket: keep the newest value, widen the envelope
+            last.timeUs = t;
+            last.value = v;
+            last.min = std::min(last.min, v);
+            last.max = std::max(last.max, v);
             return;
         }
     }
     if (s.ringSize < kHistoryCapacity) {
-        s.ring[static_cast<std::size_t>((s.ringStart + s.ringSize) % kHistoryCapacity)] = {t, v};
+        s.ring[static_cast<std::size_t>((s.ringStart + s.ringSize) % kHistoryCapacity)] = {t, v, v, v};
         ++s.ringSize;
     } else {
-        s.ring[static_cast<std::size_t>(s.ringStart)] = {t, v};
+        s.ring[static_cast<std::size_t>(s.ringStart)] = {t, v, v, v};
         s.ringStart = (s.ringStart + 1) % kHistoryCapacity;
     }
     ++s.revision;

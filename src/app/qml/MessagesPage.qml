@@ -14,8 +14,18 @@ Item {
 
     readonly property int cellSpacing: 22
     // `key` values match MessageOverviewModel::Column
+    readonly property bool showNames: ApplicationWindow.window ? ApplicationWindow.window.showNames : false
+    property var expandedIds: ({})     // frameId text -> true
+    function toggleExpanded(frameId) {
+        const copy = Object.assign({}, expandedIds)
+        if (copy[frameId])
+            delete copy[frameId]
+        else
+            copy[frameId] = true
+        expandedIds = copy
+    }
     readonly property var columns: [
-        { title: qsTr("ID"), width: 104, align: "left", key: 0 },
+        { title: showNames ? qsTr("MESSAGE") : qsTr("ID"), width: showNames ? 176 : (Session.database.loaded ? 124 : 104), align: "left", key: 0 },
         { title: qsTr("CH"), width: 28, align: "right", key: 1 },
         { title: qsTr("DLC"), width: 32, align: "right", key: 2 },
         { title: qsTr("COUNT"), width: 84, align: "right", key: 3 },
@@ -90,37 +100,84 @@ Item {
                 required property var bytes
                 required property int changedMask
                 required property real changeSerial
+                required property string messageName
+                required property var decoded
+
+                readonly property bool named: page.showNames && messageName.length > 0
+                readonly property bool expanded: Session.database.loaded && messageName.length > 0
+                                                 && page.expandedIds[frameId] === true
+                readonly property int lineHeight: Theme.size.row + 6
 
                 width: list.width
-                height: Theme.size.row + 6
+                height: lineHeight + (expanded ? grid.implicitHeight + Theme.space.sm : 0)
+                Behavior on height { NumberAnimation { duration: Theme.motion.normal; easing.type: Theme.motion.easing } }
+                clip: true
 
                 Rectangle {
                     anchors.fill: parent
-                    color: hover.hovered || page.hoverRow === row.index ? Theme.hover
+                    color: row.expanded ? Theme.alpha(Theme.accent, 0.05 + 0.03 * Theme.t)
+                         : hover.hovered || page.hoverRow === row.index ? Theme.hover
                          : (row.index % 2 === 1 ? Theme.zebra : "transparent")
                 }
-                HoverHandler { id: hover }
+                Rectangle {
+                    visible: row.expanded
+                    width: 2
+                    height: parent.height
+                    color: Theme.accent
+                }
+                HoverHandler {
+                    id: hover
+                    cursorShape: Session.database.loaded && row.messageName.length > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
+                }
+                TapHandler {
+                    onTapped: {
+                        if (Session.database.loaded && row.messageName.length > 0)
+                            page.toggleExpanded(row.frameId)
+                    }
+                }
+
+                DecodedGrid {
+                    id: grid
+                    visible: row.expanded
+                    x: Theme.space.lg + page.columns[0].width + page.cellSpacing
+                    y: row.lineHeight
+                    width: row.width - x - Theme.space.lg
+                    signalList: row.expanded ? row.decoded : []
+                }
 
                 Row {
                     x: Theme.space.lg
-                    height: parent.height
+                    height: row.lineHeight
                     spacing: page.cellSpacing
 
                     Item {
                         width: page.columns[0].width
                         height: parent.height
+                        Icon {
+                            visible: Session.database.loaded && row.messageName.length > 0
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: 0
+                            name: "chevron-right"
+                            size: 12
+                            color: row.expanded ? Theme.accentText : Theme.textFaint
+                            rotation: row.expanded ? 90 : 0
+                            Behavior on rotation { NumberAnimation { duration: Theme.motion.normal; easing.type: Theme.motion.easing } }
+                        }
                         Text {
                             id: idText
+                            x: Session.database.loaded ? 18 : 0
                             height: parent.height
+                            width: Math.min(implicitWidth, parent.width - x - (row.named ? 0 : 36))
+                            elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
-                            text: row.frameId
-                            color: Theme.text
-                            font.family: Theme.fontMono
-                            font.pixelSize: Theme.type.mono
-                            font.weight: Font.DemiBold
+                            text: row.named ? row.messageName : row.frameId
+                            color: row.expanded ? Theme.accentText : Theme.text
+                            font.family: row.named ? Theme.fontSans : Theme.fontMono
+                            font.pixelSize: row.named ? Theme.type.body : Theme.type.mono
+                            font.weight: row.named ? Font.Medium : Font.DemiBold
                         }
                         ExtTag {
-                            visible: row.extended
+                            visible: row.extended && !row.named
                             anchors.left: idText.right
                             anchors.leftMargin: 6
                             anchors.verticalCenter: parent.verticalCenter

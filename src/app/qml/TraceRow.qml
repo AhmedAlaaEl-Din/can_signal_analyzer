@@ -20,6 +20,7 @@ Item {
     required property bool fresh
     required property string delta
     required property string messageName
+    required property bool match
 
     property var columns: []
     property int cellSpacing: 20
@@ -50,11 +51,17 @@ Item {
              : hover.hovered ? Theme.hover
              : (row.ordinal % 2 === 1 ? Theme.zebra : "transparent")
     }
+    // Search match: warm tint and a marker on the left edge.
     Rectangle {
-        visible: row.selected
-        width: 2
+        visible: row.match && !row.selected
+        anchors.fill: parent
+        color: Theme.alpha(Theme.warning, 0.10 + 0.04 * Theme.t)
+    }
+    Rectangle {
+        visible: row.selected || row.match
+        width: row.selected ? 2 : 3
         height: parent.height
-        color: Theme.accent
+        color: row.selected ? Theme.accent : Theme.warning
     }
 
     HoverHandler { id: hover }

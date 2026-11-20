@@ -17,7 +17,7 @@ RowLayout {
         variant: "secondary"
         iconName: "database"
         text: qsTr("Load demo database")
-        onClicked: bar.db.loadDemo()
+        onClicked: ApplicationWindow.window.startDemo()
     }
     ToolButton {
         visible: !bar.db.loaded

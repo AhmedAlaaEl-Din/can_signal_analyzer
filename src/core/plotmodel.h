@@ -83,6 +83,16 @@ public:
     Q_INVOKABLE QVariantList visibleSignals() const;
     // Display data for a signal id: name, unit, message, isEnum, valueLabels.
     Q_INVOKABLE QVariantMap signalInfo(int signalId) const;
+    Q_INVOKABLE int signalIdByName(const QString &message, const QString &signal) const;
+
+    // Persistence: lanes as JSON that references signals by "Message.Signal"
+    // (ids depend on the database). restoreLayout() skips signals the current
+    // database does not have and returns the number of signals restored.
+    Q_INVOKABLE QString saveLayout() const;
+    Q_INVOKABLE int restoreLayout(const QString &json);
+    // Four lanes for the demo database: speed + rpm, throttle + torque,
+    // steering, gear. Returns false without the demo signals.
+    Q_INVOKABLE bool applyDemoLayout();
 
 signals:
     void countChanged();

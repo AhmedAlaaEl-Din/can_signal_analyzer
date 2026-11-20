@@ -7,11 +7,13 @@
 #include <QAnimationDriver>
 #include <QCoreApplication>
 #include <QFile>
+#include <QDateTime>
 #include <QFileInfo>
 #include <QImage>
 #include <QMutex>
 #include <QQuickWindow>
 #include <QThreadPool>
+#include <QTimeZone>
 #include <QUrl>
 #include <QVariant>
 
@@ -97,66 +99,81 @@ void DemoDirector::resizeWindow(int width, int height)
 
 void DemoDirector::buildDemoScript()
 {
-    // Scene (about 45 s): Plots tab, load the demo database, three lanes
-    // (speed + rpm, throttle + torque, steering) plus a step plot for the gear,
-    // follow live, zoom, pan, cursors A/B with the delta readout, a legend
-    // toggle, a dragged threshold, a 30 s window with the min/max band, pause,
-    // and the light theme.
+    // Final showcase (60 s): welcome screen -> "Start with the demo" (database,
+    // four plot lanes, simulator) -> record about 10 s -> stop -> replay the
+    // recording: seek, speed, two markers, single steps, loop -> trace search
+    // "VehicleSpeed > 100" -> log summary -> light theme -> About.
+    //
+    // The simulator clock runs kSimOffsetMs ahead of the scene so that the
+    // recording covers the motorway cruise above 100 km/h and the braking
+    // after it (see docs/decisions.md).
     auto a = [this](double t, const QString &action, const QVariant &arg = {}) {
         at(t, [this, action, arg] { act(action, arg); });
     };
+    const QString logPath = m_root.filePath(QStringLiteral("demo_recording.canlog"));
+    QFile::remove(logPath);
+    QFile::remove(logPath + QStringLiteral(".markers.json"));
+    m_session->setRecordingStartOverride(QDateTime(QDate(2026, 11, 19), QTime(9, 0, 0), QTimeZone::UTC));
+
     at(0.0, [this] {
         act(QStringLiteral("theme"), QStringLiteral("dark"));
-        act(QStringLiteral("tab"), 3);
+        act(QStringLiteral("tab"), 0);
         act(QStringLiteral("names"), QStringLiteral("on"));
     });
-    at(0.5, [this] { m_session->start(); });
-    a(1.5, QStringLiteral("loadDemoDb"));
-    a(3.0, QStringLiteral("plotAdd"), QStringLiteral("VehicleDynamics.VehicleSpeed@-1"));
-    a(3.6, QStringLiteral("plotAdd"), QStringLiteral("EngineData.EngineSpeed@0"));
-    a(4.4, QStringLiteral("plotAdd"), QStringLiteral("EngineData.ThrottlePosition@-1"));
-    a(5.0, QStringLiteral("plotAdd"), QStringLiteral("EngineData.EngineTorque@1"));
-    a(5.8, QStringLiteral("plotAdd"), QStringLiteral("VehicleDynamics.SteeringAngle@-1"));
-    a(6.6, QStringLiteral("plotAdd"), QStringLiteral("TransmissionStatus.CurrentGear@-1"));
-    at(9.5, [this] { screenshot(QStringLiteral("plots-live-dark")); });
+    at(1.0, [this] { screenshot(QStringLiteral("welcome-dark")); });
+    a(1.6, QStringLiteral("startDemo"));
+    at(6.0, [this] { screenshot(QStringLiteral("plots-four-lanes-dark")); });
 
-    a(10.5, QStringLiteral("plotWindow"), 5);
-    a(12.5, QStringLiteral("plotWindow"), 10);
-    // Zoom in around 70 % of the width, then pan back in time.
-    a(13.6, QStringLiteral("plotZoom"), QStringLiteral("0.75@0.7"));
-    a(14.0, QStringLiteral("plotZoom"), QStringLiteral("0.75@0.7"));
-    a(14.4, QStringLiteral("plotZoom"), QStringLiteral("0.75@0.7"));
-    for (int i = 0; i < 10; ++i)
-        a(15.2 + 0.1 * i, QStringLiteral("plotPan"), -0.04);
-    a(17.0, QStringLiteral("plotCursors"), QStringLiteral("place"));
-    for (int i = 0; i <= 8; ++i) // drag cursor B to the right
-        a(17.6 + 0.1 * i, QStringLiteral("plotCursor"), QStringLiteral("1@%1").arg(0.62 + 0.02 * i));
-    a(18.8, QStringLiteral("plotHover"), 0.47);
-    at(20.0, [this] { screenshot(QStringLiteral("plots-cursors-dark")); });
-    a(20.6, QStringLiteral("plotHover"), -1);
+    // ---- record about 10 s
+    at(7.0, [this, logPath] { m_session->startRecordingPath(logPath); });
+    a(9.5, QStringLiteral("tab"), 0);
+    a(12.0, QStringLiteral("tab"), 3);
+    at(14.0, [this] { screenshot(QStringLiteral("recording-dark")); });
+    at(17.5, [this] { m_session->stopRecording(); });
 
-    a(21.2, QStringLiteral("plotToggle"), QStringLiteral("0@EngineData.EngineSpeed"));
-    a(22.6, QStringLiteral("plotToggle"), QStringLiteral("0@EngineData.EngineSpeed"));
-    a(23.4, QStringLiteral("plotThreshold"), QStringLiteral("1@46"));
-    for (int i = 1; i <= 16; ++i) // drag the threshold up (throttle %, left axis of lane 2)
-        a(23.8 + 0.1 * i, QStringLiteral("plotThresholdMove"), QStringLiteral("1@0@%1").arg(46.0 + 0.4 * i));
-    at(26.5, [this] { screenshot(QStringLiteral("plots-threshold-dark")); });
+    // ---- replay the recording
+    at(19.0, [this, logPath] { m_session->openLogPath(logPath); });
+    a(20.5, QStringLiteral("speed"), 2);
+    a(21.0, QStringLiteral("seekHover"), 0.2);
+    a(22.0, QStringLiteral("seekFraction"), 0.2);
+    a(22.4, QStringLiteral("seekHover"), -1);
+    a(23.0, QStringLiteral("marker"), QStringLiteral("Cruise 115 km/h"));
+    a(25.4, QStringLiteral("marker"), QStringLiteral("Braking"));
+    a(25.5, QStringLiteral("speed"), 1);
+    a(26.5, QStringLiteral("markerJump"), QStringLiteral("prev"));
+    a(27.3, QStringLiteral("playPause"));
+    a(27.8, QStringLiteral("step"));
+    a(28.2, QStringLiteral("step"));
+    a(28.6, QStringLiteral("step"));
+    a(29.4, QStringLiteral("playPause"));
+    at(31.6, [this] { screenshot(QStringLiteral("replay-markers-dark")); });
+    a(32.0, QStringLiteral("loop"), QStringLiteral("on"));
+    a(32.2, QStringLiteral("speed"), 8);
+    a(32.4, QStringLiteral("playPause"));
+    a(34.6, QStringLiteral("speed"), 1);
+    a(34.7, QStringLiteral("loop"), QStringLiteral("off"));
+    a(34.9, QStringLiteral("playPause"));
 
-    a(27.2, QStringLiteral("plotCursors"), QStringLiteral("clear"));
-    a(27.6, QStringLiteral("plotFollow"));
-    a(28.6, QStringLiteral("plotWindow"), 30);
-    at(31.0, [this] { screenshot(QStringLiteral("plots-30s-band-dark")); });
+    // ---- search the trace
+    a(35.2, QStringLiteral("find"), QStringLiteral("VehicleSpeed > 100"));
+    a(36.4, QStringLiteral("findNext"), QStringLiteral("next"));
+    a(37.4, QStringLiteral("findNext"), QStringLiteral("next"));
+    at(39.2, [this] { screenshot(QStringLiteral("search-trace-dark")); });
 
-    a(32.0, QStringLiteral("theme"), QStringLiteral("light"));
-    a(33.0, QStringLiteral("plotWindow"), 10);
-    at(35.0, [this] { screenshot(QStringLiteral("plots-light")); });
-    a(35.8, QStringLiteral("plotHover"), 0.62);
-    at(37.2, [this] { screenshot(QStringLiteral("plots-tooltip-light")); });
-    a(38.0, QStringLiteral("plotHover"), -1);
-    at(39.0, [this] { m_session->setPaused(true); }); // the view freezes, capture continues
-    at(41.5, [this] { m_session->setPaused(false); });
-    a(42.5, QStringLiteral("tab"), 2);
-    a(44.0, QStringLiteral("tab"), 3);
+    // ---- log summary
+    a(40.4, QStringLiteral("tab"), 3);
+    a(41.0, QStringLiteral("summary"));
+    at(45.0, [this] { screenshot(QStringLiteral("log-summary-dark")); });
+    a(46.0, QStringLiteral("summaryClose"));
+
+    // ---- light theme, About
+    a(46.8, QStringLiteral("theme"), QStringLiteral("light"));
+    a(47.6, QStringLiteral("seekFraction"), 0.55);
+    a(48.0, QStringLiteral("playPause"));
+    at(51.5, [this] { screenshot(QStringLiteral("replay-light")); });
+    a(53.0, QStringLiteral("about"));
+    at(56.0, [this] { screenshot(QStringLiteral("about-light")); });
+    a(58.0, QStringLiteral("aboutClose"));
 }
 
 void DemoDirector::buildCheckScript()
@@ -227,6 +244,30 @@ void DemoDirector::buildCheckScript()
         act(QStringLiteral("plotExportPng"), QUrl::fromLocalFile(m_shotsDir.filePath(QStringLiteral("export-plot.png"))));
         act(QStringLiteral("plotExportCsv"), QUrl::fromLocalFile(m_root.filePath(QStringLiteral("export-visible-range.csv"))));
     });
+    // Phase 4 at the minimum window size: replay bar, summary, About, find bar.
+    // Uses the recording made by --demo (run the demo first); skipped without it.
+    at(24.0, [this] {
+        const QString log = m_root.filePath(QStringLiteral("demo_recording.canlog"));
+        if (QFile::exists(log))
+            m_session->openLogPath(log);
+    });
+    at(26.0, [this] { screenshot(QStringLiteral("min-size-replay-dark")); });
+    at(26.2, [this] { act(QStringLiteral("summary")); });
+    at(28.0, [this] { screenshot(QStringLiteral("min-size-summary-dark")); });
+    at(28.2, [this] {
+        act(QStringLiteral("summaryClose"));
+        act(QStringLiteral("theme"), QStringLiteral("light"));
+        act(QStringLiteral("about"));
+    });
+    at(29.5, [this] { screenshot(QStringLiteral("min-size-about-light")); });
+    at(29.7, [this] {
+        act(QStringLiteral("aboutClose"));
+        act(QStringLiteral("find"), QStringLiteral("12 ?? FF"));
+    });
+    at(31.0, [this] { screenshot(QStringLiteral("min-size-find-invalid-light")); });
+    at(31.2, [this] { act(QStringLiteral("find"), QStringLiteral("VehicleSpeed >")); });
+    at(32.0, [this] { screenshot(QStringLiteral("min-size-find-error-light")); });
+    at(32.2, [this] { m_session->closeLog(); act(QStringLiteral("tab"), 0); act(QStringLiteral("findClose")); });
 }
 
 void DemoDirector::start()
@@ -263,7 +304,7 @@ void DemoDirector::demoFrame()
     }
     runStepsUntil(ms);
     // Advance the simulator and the models to exactly this instant.
-    m_session->source()->stepTo(ms * 1000);
+    m_session->source()->stepTo((ms + kSimOffsetMs) * 1000);
     m_session->manualTick(ms);
     m_driver->advanceTo(ms);
     // Let queued work (Qt.callLater, layout) settle before rendering.

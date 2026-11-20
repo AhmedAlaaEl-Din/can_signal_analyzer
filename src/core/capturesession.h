@@ -3,10 +3,15 @@
 #include "busstatistics.h"
 #include "canframe.h"
 #include "framefilter.h"
+#include "framesearch.h"
+#include "logsummary.h"
 
 #include <QElapsedTimer>
 #include <QObject>
 #include <QTimer>
+#include <QUrl>
+
+#include <memory>
 
 #include <deque>
 #include <vector>
@@ -21,6 +26,10 @@ class TimeSeriesStore;
 class PlotModel;
 class PlotController;
 class SimulatedSource;
+class ReplaySource;
+class LogRecorder;
+class MarkerStore;
+class FrameSource;
 
 // Owns the frame source and the models and moves frames between them.
 // Frames arrive from the source thread at any rate; they are collected and
@@ -60,6 +69,19 @@ class CaptureSession : public QObject
     Q_PROPERTY(QObject *timeSeries READ timeSeriesObject CONSTANT)
     Q_PROPERTY(QObject *plotModel READ plotModelObject CONSTANT)
     Q_PROPERTY(QObject *plot READ plotControllerObject CONSTANT)
+    Q_PROPERTY(QObject *replay READ replayObject CONSTANT)
+    Q_PROPERTY(QObject *recorder READ recorderObject CONSTANT)
+    Q_PROPERTY(QObject *markers READ markersObject CONSTANT)
+
+    // Replay: the same pipeline fed from a log file instead of the simulator.
+    Q_PROPERTY(bool replayMode READ replayMode NOTIFY replayModeChanged)
+    Q_PROPERTY(bool summaryBusy READ summaryBusy NOTIFY summaryBusyChanged)
+
+    // Trace search (see FrameSearch for the syntax).
+    Q_PROPERTY(QString searchText READ searchText WRITE setSearchText NOTIFY searchChanged)
+    Q_PROPERTY(bool searchValid READ searchValid NOTIFY searchChanged)
+    Q_PROPERTY(QString searchDescription READ searchDescription NOTIFY searchChanged)
+    Q_PROPERTY(QString searchError READ searchError NOTIFY searchChanged)
 
 public:
     static constexpr int kFlushIntervalMs = 30;
@@ -104,6 +126,48 @@ public:
     PlotModel *plotModel() const { return m_plotModel; }
     PlotController *plotController() const { return m_plot; }
     SimulatedSource *source() const { return m_source; }
+    ReplaySource *replay() const { return m_replay; }
+    LogRecorder *recorder() const { return m_recorder; }
+    MarkerStore *markers() const { return m_markers; }
+    FrameSource *activeSource() const;
+
+    bool replayMode() const { return m_replayMode; }
+    bool summaryBusy() const { return m_summaryBusy; }
+    QString searchText() const { return m_searchText; }
+    void setSearchText(const QString &text);
+    bool searchValid() const { return m_search.isValid(); }
+    QString searchDescription() const { return m_search.description(); }
+    QString searchError() const { return m_search.error(); }
+
+    // ---- recording
+    Q_INVOKABLE QString defaultLogFolder() const;
+    Q_INVOKABLE QString defaultLogName() const;
+    Q_INVOKABLE bool startRecording(const QUrl &file);
+    bool startRecordingPath(const QString &path);
+    Q_INVOKABLE void stopRecording();
+    // Fixed header start time (deterministic demo capture); invalid = now.
+    void setRecordingStartOverride(const QDateTime &utc) { m_recordStartOverride = utc; }
+
+    // ---- replay
+    // Opens a .canlog (or imports a .csv) and switches to replay mode.
+    Q_INVOKABLE bool openLog(const QUrl &file);
+    bool openLogPath(const QString &path);
+    Q_INVOKABLE void closeLog();       // back to the live simulator (stopped)
+    Q_INVOKABLE void seekReplay(qint64 timeUs);
+    Q_INVOKABLE void addMarker(const QString &name = {});
+    Q_INVOKABLE bool jumpToMarker(bool forward);
+    Q_INVOKABLE bool exportLogCsv(const QUrl &file);
+    Q_INVOKABLE void requestSummary();  // summaryReady() when done
+    Q_INVOKABLE bool exportSummaryCsv(const QUrl &file);
+    Q_INVOKABLE QString localPath(const QUrl &url) const;
+    Q_INVOKABLE bool fileExists(const QString &path) const;
+
+    // ---- search
+    Q_INVOKABLE int findNext(int fromRow, bool forward);
+    Q_INVOKABLE int matchCount() const;
+
+    // Demo setup in one step: demo database, default plot layout, simulator running.
+    Q_INVOKABLE void loadDemoSetup();
 
     // Manual time (deterministic capture): timers are not used; the owner calls
     // manualTick() after advancing the source, with its own notion of "now".
@@ -129,6 +193,12 @@ signals:
     void filterChanged();
     void cleared();
     void modeChanged();
+    void replayModeChanged();
+    void summaryBusyChanged();
+    void searchChanged();
+    void summaryReady(const QVariantMap &summary);
+    // Short user-facing message (toast); tone is "ok" or "error".
+    void notice(const QString &text, const QString &tone);
 
 private:
     void onFrames(const can::CanFrameBatch &batch);
@@ -141,6 +211,11 @@ private:
     QObject *timeSeriesObject() const;
     QObject *plotModelObject() const;
     QObject *plotControllerObject() const;
+    QObject *replayObject() const;
+    QObject *recorderObject() const;
+    QObject *markersObject() const;
+    void clearViews();
+    void setReplayMode(bool on);
     qint64 now() const;
     void applyDatabase();
 
@@ -152,6 +227,18 @@ private:
     TimeSeriesStore *m_store;
     PlotModel *m_plotModel;
     PlotController *m_plot;
+    ReplaySource *m_replay;
+    LogRecorder *m_recorder;
+    MarkerStore *m_markers;
+    bool m_replayMode = false;
+    bool m_summaryBusy = false;
+    LogSummary m_lastSummary;
+    QString m_tempCanlog; // CSV imports are converted into this file
+    QString m_openedPath; // the file the user opened (CSV or canlog)
+    QDateTime m_recordStartOverride;
+    qint64 m_lastRecorderFlushMs = 0;
+    QString m_searchText;
+    FrameSearch m_search;
     bool m_manualTime = false;
     qint64 m_manualNowMs = 0;
     BusStatistics m_stats;

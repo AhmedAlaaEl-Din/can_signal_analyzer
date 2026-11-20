@@ -28,9 +28,50 @@ ApplicationWindow {
     readonly property bool showNames: namesPreferred && Session.database.loaded
 
     function openDatabaseDialog() { dbDialog.open() }
+    function openLogDialog() { logDialog.open() }
+    function showToast(text, tone) { toast.show(text, tone) }
+    // "Load demo": one click to a useful screen (database, plots, running).
+    function startDemo() {
+        if (Session.replayMode) {
+            Session.database.loadDemo()
+            if (Session.plotModel.count === 0)
+                Session.plotModel.applyDemoLayout()
+        } else {
+            Session.loadDemoSetup()
+        }
+        window.currentTab = 3
+    }
+    function requestRecord() {
+        if (Session.recorder.recording) {
+            Session.stopRecording()
+            return
+        }
+        recordDialog.currentFolder = Settings.value("logs/folder", "file:///" + Session.defaultLogFolder())
+        recordDialog.selectedFile = recordDialog.currentFolder + "/" + Session.defaultLogName()
+        recordDialog.open()
+    }
+    function openSummary() {
+        summaryDialog.summary = ({})
+        summaryDialog.open()
+        Session.requestSummary()
+    }
+    function openFile(url) {
+        const path = Session.localPath(url).toLowerCase()
+        if (path.endsWith(".dbc")) {
+            Session.database.loadFile(url)
+        } else if (path.endsWith(".canlog") || path.endsWith(".csv")) {
+            if (Session.openLog(url))
+                Settings.setValue("logs/folder", String(url).replace(/\/[^\/]*$/, ""))
+        } else {
+            toast.show(qsTr("Drop a .canlog, .csv or .dbc file."), "error")
+        }
+    }
 
     header: AppToolBar {
         id: toolBar
+        onRecordRequested: window.requestRecord()
+        onOpenLogRequested: window.openLogDialog()
+        onAboutRequested: aboutDialog.open()
     }
 
     footer: StatusBar {
@@ -42,6 +83,122 @@ ApplicationWindow {
         title: qsTr("Open signal database")
         nameFilters: [qsTr("CAN databases (*.dbc)"), qsTr("All files (*)")]
         onAccepted: Session.database.loadFile(selectedFile)
+    }
+    FileDialog {
+        id: logDialog
+        title: qsTr("Open a log for replay")
+        nameFilters: [qsTr("CAN logs (*.canlog *.csv)"), qsTr("CAN Analyzer logs (*.canlog)"), qsTr("CSV frames (*.csv)")]
+        onAccepted: window.openFile(selectedFile)
+    }
+    FileDialog {
+        id: recordDialog
+        title: qsTr("Record to")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "canlog"
+        nameFilters: [qsTr("CAN Analyzer logs (*.canlog)")]
+        onAccepted: {
+            if (Session.startRecording(selectedFile))
+                Settings.setValue("logs/folder", String(currentFolder))
+        }
+    }
+    FileDialog {
+        id: logCsvDialog
+        title: qsTr("Export the log as CSV")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "csv"
+        nameFilters: [qsTr("CSV files (*.csv)")]
+        onAccepted: Session.exportLogCsv(selectedFile)
+    }
+    FileDialog {
+        id: summaryCsvDialog
+        title: qsTr("Export the summary as CSV")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "csv"
+        nameFilters: [qsTr("CSV files (*.csv)")]
+        onAccepted: Session.exportSummaryCsv(selectedFile)
+    }
+
+    LogSummaryDialog {
+        id: summaryDialog
+        onExportRequested: summaryCsvDialog.open()
+    }
+    AboutDialog { id: aboutDialog }
+
+    Connections {
+        target: Session
+        function onNotice(text, tone) { toast.show(text, tone) }
+        function onSummaryReady(summary) { summaryDialog.summary = summary }
+        function onReplayModeChanged() {
+            // A replay starts in the Trace or Plots tab, wherever the user is.
+            if (Session.replayMode && window.currentTab === 1)
+                window.currentTab = 0
+        }
+    }
+
+    // ---- persistence (theme, window, tab, database, filters, plot layout) ----
+    function restoreSettings() {
+        if (!Settings.enabled)
+            return
+        Theme.dark = Settings.value("ui/dark", "true") === "true" || Settings.value("ui/dark", true) === true
+        const w = Number(Settings.value("window/width", 0)), h = Number(Settings.value("window/height", 0))
+        if (w >= minimumWidth && h >= minimumHeight) {
+            window.width = w
+            window.height = h
+        }
+        if (Settings.value("window/maximized", "false") === "true")
+            window.visibility = Window.Maximized
+        window.namesPreferred = Settings.value("ui/names", "true") !== "false"
+        const db = String(Settings.value("database/path", ""))
+        if (db === "demo") {
+            Session.database.loadDemo()
+        } else if (db.length > 0) {
+            if (Session.fileExists(db))
+                Session.database.loadFile("file:///" + db)
+            else
+                toast.show(qsTr("The last database (%1) was not found; starting without it.").arg(db.split(/[\\/]/).pop()), "error")
+        }
+        const layout = String(Settings.value("plots/layout", ""))
+        if (layout.length > 0 && Session.database.loaded)
+            Session.plotModel.restoreLayout(layout)
+        Session.plot.windowSeconds = Number(Settings.value("plots/window", 10))
+        tracePage.setIdFilterText(String(Settings.value("trace/idFilter", "")))
+        Session.dlcFilter = String(Settings.value("trace/dlcFilter", ""))
+        Session.formatFilter = Number(Settings.value("trace/formatFilter", 0))
+        window.currentTab = Math.max(0, Math.min(3, Number(Settings.value("ui/tab", 0))))
+    }
+    function saveSettings() {
+        if (!Settings.enabled)
+            return
+        Settings.setValue("ui/dark", Theme.dark ? "true" : "false")
+        Settings.setValue("window/maximized", window.visibility === Window.Maximized ? "true" : "false")
+        if (window.visibility !== Window.Maximized) {
+            Settings.setValue("window/width", window.width)
+            Settings.setValue("window/height", window.height)
+        }
+        Settings.setValue("ui/names", window.namesPreferred ? "true" : "false")
+        Settings.setValue("ui/tab", window.currentTab)
+        Settings.setValue("database/path", !Session.database.loaded ? ""
+                          : Session.database.isDemo ? "demo" : Session.database.path)
+        Settings.setValue("plots/layout", Session.database.loaded ? Session.plotModel.saveLayout() : "")
+        Settings.setValue("plots/window", Session.plot.windowSeconds)
+        Settings.setValue("trace/idFilter", Session.idFilter)
+        Settings.setValue("trace/dlcFilter", Session.dlcFilter)
+        Settings.setValue("trace/formatFilter", Session.formatFilter)
+        Settings.sync()
+    }
+    Component.onCompleted: restoreSettings()
+    onClosing: saveSettings()
+
+    // Drop a log or a database anywhere on the window.
+    DropArea {
+        anchors.fill: parent
+        keys: ["text/uri-list"]
+        onDropped: (drop) => {
+            if (drop.hasUrls && drop.urls.length > 0) {
+                window.openFile(drop.urls[0])
+                drop.accept()
+            }
+        }
     }
 
     ColumnLayout {
@@ -112,6 +269,8 @@ ApplicationWindow {
                 id: tracePage
                 anchors.fill: parent
                 active: window.currentTab === 0
+                onDemoRequested: window.startDemo()
+                onOpenLogRequested: window.openLogDialog()
             }
             MessagesPage {
                 id: messagesPage
@@ -130,11 +289,41 @@ ApplicationWindow {
                 demoMode: window.demoMode
             }
         }
+
+        ReplayBar {
+            id: replayBar
+            Layout.fillWidth: true
+            Layout.preferredHeight: Session.replayMode ? implicitHeight : 0
+            visible: Session.replayMode
+            onSummaryRequested: window.openSummary()
+            onExportRequested: logCsvDialog.open()
+        }
+    }
+
+    Toast {
+        id: toast
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Theme.space.xl + (Session.replayMode ? 56 : 0)
+        z: 100
     }
 
     // ---------------------------------------------------------------- keys
     Shortcut { sequences: ["F5"]; onActivated: Session.toggleRunning() }
     Shortcut { sequences: ["F6", "Space"]; onActivated: Session.togglePause() }
+    Shortcut { sequence: "Ctrl+R"; enabled: !Session.replayMode; onActivated: window.requestRecord() }
+    Shortcut { sequence: "Ctrl+Shift+O"; onActivated: window.openLogDialog() }
+    Shortcut { sequence: "F1"; onActivated: aboutDialog.open() }
+    // Replay transport
+    Shortcut { sequence: "."; enabled: Session.replayMode; onActivated: Session.replay.stepFrame() }
+    Shortcut { sequence: "M"; enabled: Session.replayMode; onActivated: Session.addMarker("") }
+    Shortcut { sequence: "]"; enabled: Session.replayMode; onActivated: Session.jumpToMarker(true) }
+    Shortcut { sequence: "["; enabled: Session.replayMode; onActivated: Session.jumpToMarker(false) }
+    Shortcut { sequence: "Ctrl+Home"; enabled: Session.replayMode; onActivated: Session.seekReplay(Session.replay.startUs) }
+    Shortcut { sequence: "Ctrl+End"; enabled: Session.replayMode; onActivated: Session.seekReplay(Session.replay.endUs) }
+    // Trace find
+    Shortcut { sequence: "F3"; onActivated: { window.currentTab = 0; tracePage.findNext(true) } }
+    Shortcut { sequence: "Shift+F3"; onActivated: { window.currentTab = 0; tracePage.findNext(false) } }
     Shortcut { sequence: "Ctrl+L"; onActivated: Session.clear() }
     Shortcut { sequence: "Ctrl+T"; onActivated: Theme.toggle() }
     Shortcut { sequence: "Ctrl+O"; onActivated: window.openDatabaseDialog() }
@@ -150,7 +339,7 @@ ApplicationWindow {
                 signalsPage.focusSearch()
             } else {
                 window.currentTab = 0
-                tracePage.focusFilter()
+                tracePage.openFind()
             }
         }
     }
@@ -234,6 +423,29 @@ ApplicationWindow {
         case "plotExportPng": plotsPage.exportPng(arg); break
         case "plotExportCsv": plotsPage.exportCsv(arg); break
         case "plotHover": plotsPage.hoverX = Number(arg) < 0 ? -1 : Number(arg) * plotsPage.plotWidth; break
+        // ---- phase 4: logging, replay, search, dialogs ----
+        case "startDemo": window.startDemo(); break
+        case "speed": Session.replay.speed = Number(arg); break
+        case "loop": Session.replay.loop = (arg === "on"); break
+        case "seekFraction": Session.seekReplay(Session.replay.startUs + Number(arg) * Session.replay.durationUs); break
+        case "seekHover": {
+            const f = Number(arg)
+            replayBar.seekBar.demoHover = f >= 0
+            replayBar.seekBar.hoverUs = f < 0 ? -1 : Session.replay.startUs + f * Session.replay.durationUs
+            break
+        }
+        case "marker": Session.addMarker(String(arg)); break
+        case "markerJump": Session.jumpToMarker(arg === "next"); break
+        case "step": Session.replay.stepFrame(); break
+        case "playPause": Session.togglePause(); break
+        case "find": window.currentTab = 0; tracePage.setSearch(String(arg)); break
+        case "findNext": tracePage.findNext(arg !== "prev"); break
+        case "findClose": tracePage.closeFind(); break
+        case "summary": window.openSummary(); break
+        case "summaryClose": summaryDialog.close(); break
+        case "about": aboutDialog.open(); break
+        case "aboutClose": aboutDialog.close(); break
+        case "toast": { const p = String(arg).split("@"); toast.show(p[0], p[1] || "ok"); break }
         default: console.warn("unknown demo action", name)
         }
     }

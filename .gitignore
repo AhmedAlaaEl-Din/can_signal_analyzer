@@ -19,3 +19,6 @@ evidence/
 
 # Machine-specific Claude Code settings (local toolchain paths)
 .claude/settings.local.json
+
+# Release packages (built by the package_zip target)
+dist/

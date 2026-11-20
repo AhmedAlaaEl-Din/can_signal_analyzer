@@ -40,6 +40,7 @@ bool SignalDatabase::loadPath(const QString &path)
     }
     dismissError();
     const int warnings = static_cast<int>(r.warnings.size());
+    m_path = QFileInfo(path).absoluteFilePath();
     setDatabase(std::make_shared<const Database>(std::move(*r.database)), false, warnings);
     return true;
 }
@@ -47,6 +48,7 @@ bool SignalDatabase::loadPath(const QString &path)
 void SignalDatabase::loadDemo()
 {
     dismissError();
+    m_path.clear();
     setDatabase(demoDatabase(), true, 0);
 }
 
@@ -54,6 +56,7 @@ void SignalDatabase::unload()
 {
     if (!m_db)
         return;
+    m_path.clear();
     setDatabase(nullptr, false, 0);
 }
 

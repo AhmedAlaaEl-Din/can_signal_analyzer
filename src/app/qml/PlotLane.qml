@@ -427,6 +427,43 @@ Item {
     property bool demoMode: false
     HoverHandler { id: laneHover; enabled: !lane.demoMode }
 
+    // ---- quantisation hint -------------------------------------------------------------
+    // When zoomed in so far that a signal's resolution shows as stairs, say so:
+    // the stairs are the real data (display smoothing would invent values).
+    readonly property var quantised: {
+        for (const s of lane.leftSeries) {
+            if (s.isEnum || !(s.resolution > 0))
+                continue
+            const steps = (lane.shownMax - lane.shownMin) / s.resolution
+            if (steps > 0 && steps < 40)
+                return s
+        }
+        return null
+    }
+    Rectangle {
+        visible: lane.quantised !== null && lane.plotHeight > 70
+        x: lane.axisWidth + lane.plotWidth - width - 8
+        y: lane.topPad + lane.plotHeight - height - 6
+        width: quantText.implicitWidth + 14
+        height: 20
+        radius: 10
+        color: Theme.alpha(Theme.surface, 0.86)
+        border.width: 1
+        border.color: Theme.border
+        Text {
+            id: quantText
+            anchors.centerIn: parent
+            text: lane.quantised
+                  ? qsTr("Steps = %1 resolution %2 %3").arg(lane.quantised.name)
+                        .arg(Session.plot.formatValue(lane.quantised.resolution, lane.quantised.decimals))
+                        .arg(lane.quantised.unit)
+                  : ""
+            color: Theme.textFaint
+            font.family: Theme.fontSans
+            font.pixelSize: Theme.type.caption
+        }
+    }
+
     // ---- empty lane / drop target ----------------------------------------------------
     Text {
         anchors.centerIn: canvas

@@ -2,7 +2,12 @@
 
 #include "signalcodec.h"
 
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+
 #include <algorithm>
+#include <cmath>
 
 namespace can {
 
@@ -87,11 +92,119 @@ QVariantMap PlotModel::signalInfo(int signalId) const
     m[QStringLiteral("message")] = m_db->messages[static_cast<std::size_t>(mi)].name;
     m[QStringLiteral("isEnum")] = !d->valueTable.empty();
     m[QStringLiteral("decimals")] = codec::decimalsFor(*d);
+    m[QStringLiteral("resolution")] = std::abs(d->factor);
     QVariantList labels;
     for (const auto &[raw, text] : d->valueTable)
         labels << QVariantMap{{QStringLiteral("value"), codec::toPhysical(*d, raw)}, {QStringLiteral("text"), text}};
     m[QStringLiteral("valueLabels")] = labels;
     return m;
+}
+
+int PlotModel::signalIdByName(const QString &message, const QString &signal) const
+{
+    for (std::size_t id = 0; id < m_signalIndex.size(); ++id) {
+        const auto [mi, si] = m_signalIndex[id];
+        const auto &m = m_db->messages[static_cast<std::size_t>(mi)];
+        if (m.name == message && m.signalList[static_cast<std::size_t>(si)].name == signal)
+            return static_cast<int>(id);
+    }
+    return -1;
+}
+
+QString PlotModel::saveLayout() const
+{
+    QJsonArray lanes;
+    for (const Lane &l : m_lanes) {
+        QJsonArray series;
+        for (const Series &s : l.series) {
+            const auto [mi, si] = m_signalIndex[static_cast<std::size_t>(s.signalId)];
+            const auto &m = m_db->messages[static_cast<std::size_t>(mi)];
+            series.append(QJsonObject{
+                {QStringLiteral("signal"), m.name + QLatin1Char('.') + m.signalList[static_cast<std::size_t>(si)].name},
+                {QStringLiteral("color"), s.color},
+                {QStringLiteral("visible"), s.visible},
+                {QStringLiteral("dashed"), s.dashed}});
+        }
+        QJsonArray thresholds;
+        for (double t : l.thresholds)
+            thresholds.append(t);
+        lanes.append(QJsonObject{{QStringLiteral("series"), series},
+                                 {QStringLiteral("weight"), l.weight},
+                                 {QStringLiteral("yLocked"), l.yLocked},
+                                 {QStringLiteral("yMin"), l.yMin},
+                                 {QStringLiteral("yMax"), l.yMax},
+                                 {QStringLiteral("thresholds"), thresholds}});
+    }
+    return QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("version"), 1}, {QStringLiteral("lanes"), lanes}})
+                                 .toJson(QJsonDocument::Compact));
+}
+
+int PlotModel::restoreLayout(const QString &json)
+{
+    if (!m_db)
+        return 0;
+    const QJsonObject root = QJsonDocument::fromJson(json.toUtf8()).object();
+    if (root.value(QStringLiteral("version")).toInt() != 1)
+        return 0;
+    std::vector<Lane> lanes;
+    int restored = 0;
+    for (const auto &lv : root.value(QStringLiteral("lanes")).toArray()) {
+        const QJsonObject lo = lv.toObject();
+        Lane lane;
+        for (const auto &sv : lo.value(QStringLiteral("series")).toArray()) {
+            const QJsonObject so = sv.toObject();
+            const QString full = so.value(QStringLiteral("signal")).toString();
+            const int id = signalIdByName(full.section(QLatin1Char('.'), 0, 0), full.section(QLatin1Char('.'), 1));
+            if (id < 0)
+                continue;
+            Series s;
+            s.signalId = id;
+            s.color = std::clamp(so.value(QStringLiteral("color")).toInt(), 0, kPaletteSize - 1);
+            s.visible = so.value(QStringLiteral("visible")).toBool(true);
+            s.dashed = so.value(QStringLiteral("dashed")).toBool(false);
+            lane.series.push_back(s);
+            ++restored;
+        }
+        if (lane.series.empty())
+            continue;
+        lane.id = m_nextLaneId++;
+        lane.weight = std::clamp(lo.value(QStringLiteral("weight")).toDouble(1.0), 0.25, 4.0);
+        lane.yLocked = lo.value(QStringLiteral("yLocked")).toBool(false);
+        lane.yMin = lo.value(QStringLiteral("yMin")).toDouble(0);
+        lane.yMax = lo.value(QStringLiteral("yMax")).toDouble(1);
+        for (const auto &t : lo.value(QStringLiteral("thresholds")).toArray())
+            lane.thresholds.push_back(t.toDouble());
+        lanes.push_back(std::move(lane));
+    }
+    if (lanes.empty())
+        return 0;
+    beginResetModel();
+    m_lanes = std::move(lanes);
+    endResetModel();
+    emit countChanged();
+    emit weightsChanged();
+    return restored;
+}
+
+bool PlotModel::applyDemoLayout()
+{
+    const int speed = signalIdByName(QStringLiteral("VehicleDynamics"), QStringLiteral("VehicleSpeed"));
+    const int rpm = signalIdByName(QStringLiteral("EngineData"), QStringLiteral("EngineSpeed"));
+    const int throttle = signalIdByName(QStringLiteral("EngineData"), QStringLiteral("ThrottlePosition"));
+    const int torque = signalIdByName(QStringLiteral("EngineData"), QStringLiteral("EngineTorque"));
+    const int steering = signalIdByName(QStringLiteral("VehicleDynamics"), QStringLiteral("SteeringAngle"));
+    const int gear = signalIdByName(QStringLiteral("TransmissionStatus"), QStringLiteral("CurrentGear"));
+    if (speed < 0 || rpm < 0 || throttle < 0 || torque < 0 || steering < 0 || gear < 0)
+        return false;
+    clear();
+    const int l0 = addSignal(speed, -1);
+    addSignal(rpm, l0);
+    const int l1 = addSignal(throttle, -1);
+    addSignal(torque, l1);
+    addSignal(steering, -1);
+    const int l3 = addSignal(gear, -1);
+    setWeight(l3, 0.7);
+    return true;
 }
 
 QVariantList PlotModel::seriesToVariant(const Lane &lane) const

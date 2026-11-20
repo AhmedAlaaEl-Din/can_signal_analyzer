@@ -330,3 +330,155 @@ Findings → changes:
    towards their targets in a per-lane `FrameAnimation` (exponential smoothing, τ = 90 ms).
 5. Verified: 960 × 600 Plots layout, empty states, PNG and CSV export from the app
    (layout check), both themes. Final frames/screenshots re-captured after this round.
+
+---
+
+# Phase 4: logging, replay, release
+
+## Log format (`.canlog`)
+- **Own binary format rather than an existing one.** Open formats (ASC, BLF, MF4) either
+  have no index (ASC is text, slow to seek), are proprietary (BLF), or are far larger to
+  implement correctly (MF4). The brief asks for a compact, documented, versioned format with
+  fast seeking; a block format does that in about 500 lines. Spec: `docs/log-format.md`.
+- **Blocks as the index.** Every block header carries the first/last timestamp and the frame
+  count, so opening a file reads only the headers (11 ms for 1,000,000 frames) and no
+  separate index has to be kept consistent. A block holds at most 4096 frames; the recorder
+  writes one every 250 ms.
+- **Crash safety.** One `write()` per block, then a flush; the reader stops at the first
+  incomplete block and reports the ignored bytes. A CRC-32 per block detects damage; a bad
+  block is skipped, not fatal. Tested by truncating files mid-payload and mid-header.
+- **Relative timestamps** as LEB128 varints (1–2 bytes typically); IDs 2 bytes for standard
+  frames. Result: about 13 bytes per frame on the demo traffic (13.2 measured on 1,000,000 frames).
+- **Recorded timestamps start at 0** with the first recorded frame; the wall-clock start is
+  in the header (UTC, ms).
+- **CSV import requires time order** (reports the line) instead of sorting: sorting would
+  need the whole file in memory, and an out-of-order CSV is usually a broken export.
+
+## Recording
+- Writer on its own thread (`LogRecorder`), fed by the same batches as the views; the GUI
+  thread never touches the disk. A synchronous mode is used by the tests and the
+  deterministic demo (so the file size in the captured frames is reproducible).
+- Recording is **disabled in replay mode** (re-recording a replay is never what is wanted).
+- File naming: `can_YYYY-MM-DD_HH-MM-SS.canlog` proposed in a save dialog, default folder
+  `Documents/CAN Analyzer logs`, last folder remembered.
+
+## Replay
+- `ReplaySource` is a second `FrameSource`; `CaptureSession` switches the active source, so
+  trace, messages, signals and plots are unchanged.
+- **Timing:** position += clock delta × speed on every 10 ms tick, then every frame with
+  `t <= position` is delivered. The clock is injectable (fake clock in tests, the demo clock
+  in `--demo`). Speeds 0.25×–8× (API 0.05–64); "Max" delivers 4000 frames per tick
+  (≈ 400,000 frames/s) so the views keep up and the UI stays responsive.
+- **Seek:** views clear, then a **pre-roll** of up to 10 s (max 60,000 frames) before the
+  target is delivered at once so plots and the trace show context immediately; pre-roll is
+  not counted as bus traffic. The seek bar previews while dragging and seeks on release
+  (a seek rebuilds every view).
+- Rate and bus load in the status bar are divided by the replay speed: they describe the
+  recorded bus, not how fast it is played (round 1 finding: 173 % "bus load" at 8×).
+- **Markers** in a JSON sidecar next to the log (`<log>.markers.json`), saved atomically on
+  every change; the log itself is never modified. Shown on the seek bar and as thin lines in
+  the plots; `M`, `[` and `]`.
+- Space plays/pauses in replay mode; F5 (start/stop the simulator) is not used in replay.
+
+## Search in the trace
+- One field, the kind is detected: signal condition (`Name op value`, value-table text
+  allowed), data pattern (2+ hex bytes, `??` wildcard, matched from byte 0), ID or message
+  name. The interpretation is shown as a chip ("Signal VehicleSpeed > 100 km/h") so the
+  user sees how the text was understood; errors are explained in place.
+- Equality on signals uses half a quantisation step as tolerance (a physical value like
+  88.8 km/h is stored as 8880 × 0.01 and must compare equal).
+- Matches are highlighted (warm tint and a marker on the left edge); F3 / Shift+F3 wrap
+  around. Without a selection the first F3 starts at the beginning of the buffer.
+- Ctrl+F in the Trace now opens find (the filter fields remain one click away).
+
+## Polish
+1. **Follow-live chip** moved from the centre of the plots to the empty corner under the
+   value axis (left of the time axis): it never covers a lane. States: Live, Replay,
+   Paused, Follow (clickable).
+2. **Step signals**: no min/max band; zoomed out, one clean step line through each column's
+   last state; repeated samples are dropped so the thick line has no zero-length segments
+   (the joins of those segments made the gear line look fuzzy, round 1).
+3. **Quantisation: explanatory hint, not smoothing.** Smoothing would draw values that never
+   occurred, which is the wrong default for a measurement tool. When a lane is zoomed in to
+   fewer than 40 resolution steps, a small hint says "Steps = ThrottlePosition resolution
+   0.4 %".
+4. **Start-up**: a fresh launch shows a welcome screen with "Start with the demo" (demo
+   database + four-lane layout + simulator running + Plots tab) and "Open a log". "Load demo
+   database" everywhere does the same one-click setup.
+5. **Persistence** (`QSettings`, per-user registry): theme, window size/maximised, tab,
+   names/hex, last database (or "demo"), plot layout (by `Message.Signal` names so it
+   survives database reloads), plot window, trace filters, last log folder. A missing saved
+   database shows a toast and the app starts without it. Disabled in `--demo`,
+   `--layout-check` and `--smoke-test` so captures are reproducible and never touch the
+   user's settings.
+6. **About**: version, build (compiler, type, architecture), Qt version actually loaded vs
+   built against, the LGPLv3 notice and links to the shipped license files.
+
+## Release
+- **Version in one place**: `project(VERSION 1.0.0)` → generated `version.h`, the Windows
+  `VERSIONINFO` resource, the About dialog, the package name.
+- **App icon**: drawn as SVG (CAN bits turning into a smooth signal). `can_icongen`
+  renders it to a multi-size `.ico` at build time (no external tools); the window icon uses
+  the SVG directly. The tool initially used a GUI application object and hung the build
+  waiting on the platform plugin; it now needs none.
+- **License**: MIT for the project's own code, chosen as the safest common default for a
+  public portfolio repository (listed in needs-me for confirmation). Copyright line names no
+  person ("The CAN Analyzer author").
+- **Package** (`package_zip` target): windeployqt (release, no translations, no software
+  OpenGL), the MSVC runtime DLLs app-local (via CMake's `InstallRequiredSystemLibraries`),
+  no `.pdb`/`.lib`, demo database, a 60 s sample log generated by `can_logtool` at package
+  time (deterministic, fixed start time), README for the zip, LICENSE, `THIRD_PARTY` with
+  the official LGPLv3/GPLv3 texts copied from the installed Qt sources, a notice with the Qt
+  source location and how to replace the Qt DLLs.
+- **No installer**: no installer tool (NSIS, WiX, Inno Setup, Qt Installer Framework) is in
+  the allowed toolchain, and installing one was not allowed. The portable zip is the
+  release; see needs-me.
+- **No written source offer** in the Qt notice: it would be a legal commitment on the
+  owner's behalf. The notice points to the official Qt source download; needs-me asks the
+  owner to decide.
+
+## Demo capture (Phase 4)
+- 60 s scene, 721 frames at 12 fps. The simulator clock runs 26 s ahead of the scene clock
+  so the ~10 s recording covers the cruise above 100 km/h and the braking after it, which
+  makes the search `VehicleSpeed > 100` and the markers meaningful.
+- Recording start time is fixed in the demo (deterministic summary dialog).
+
+## Design review — Phase 4, round 1 (first 60 s capture)
+1. **Recording overflowed the toolbar**: REC chip plus a second "Stop" next to the
+   simulator's Stop; the theme button was pushed off the window. → The stop control is an
+   icon inside the REC chip (one "Stop" left, the simulator's).
+2. **Fuzzy gear line**: step series repeated every sample; the zero-length segments had no
+   direction and the joins pinched the thick line. → Step series keep only their corners and
+   the strip builder drops coincident points.
+3. The follow chip said "Play" while the replay was paused or ended. → Live / Replay /
+   Paused / Follow.
+4. F3 with no selection started from the top visible row; in a following view that is the
+   live end, the match scrolled away immediately. → Starts at the beginning of the buffer
+   (Shift+F3 at the end).
+5. Bus load showed 173 % at 8× replay. → Rate and load divided by the replay speed.
+6. Script issues (not app bugs): play/pause toggled at the wrong moment twice (replay had
+   ended / was still playing). Script fixed.
+
+## Design review — Phase 4, round 2 (second capture + layout check)
+1. "VehicleSpeed >" (unfinished condition) was read as a data pattern: "VehicleSpeed is not
+   a byte". → Any text with an operator is treated as a condition attempt with an example
+   in the error; words that are not hex bytes give the general hint. Tests added.
+2. Data pattern chip ended with "…", which looked like truncated text. → "Data 12 ?? FF
+   (from byte 0)", which also explains the matching rule.
+3. At 960 × 600 the status bar shortcut hints were clipped. → Hints and the source text hide
+   below 1040 px.
+4. In replay the trace pill said "Jump to live". → "Follow playback".
+5. Verified at minimum size: replay bar, summary dialog, About, find bar (valid, no match,
+   error) in both themes.
+6. Benchmark finding: CSV export of 1,000,000 frames took 28 s (allocation per field). →
+   Allocation-free formatter and 1 MB writes: 0.27 s.
+
+## Release package checks
+- First zip had no MSVC runtime: CMake 3.30 does not know the VS 18 toolset, so
+  `InstallRequiredSystemLibraries` returned nothing. → Fallback to the redist folder of the
+  developer environment (`VCToolsRedistDir`), with a warning if neither exists.
+- QML debugger plugins (`qmltooling`) were deployed. → Skipped (no debug files in the zip).
+- Clean-copy test: unzipped into an empty folder outside the repo, run with
+  `PATH=C:\Windows\System32;C:\Windows` and no Qt variables: `--smoke-test` loads the demo
+  database, replays the sample log at 8× and exits 0 (23,248 frames, Qt 6.12.0 loaded from
+  the package). The exe properties show "CAN Analyzer 1.0.0".

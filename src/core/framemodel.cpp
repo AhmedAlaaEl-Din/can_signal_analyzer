@@ -69,6 +69,7 @@ QVariant FrameModel::data(const QModelIndex &index, int role) const
     case SeqRole: return QVariant::fromValue<qulonglong>(seq);
     case OrdinalRole: return QVariant::fromValue<qulonglong>(m_removedFromFront + static_cast<std::uint64_t>(index.row()));
     case FreshRole: return seq >= m_freshFromSeq;
+    case MatchRole: return m_search.isValid() && m_search.matches(f);
     case MessageNameRole: {
         const MessageDef *m = m_db ? m_db->find(f.id, f.extended) : nullptr;
         return m ? m->name : QString();
@@ -114,6 +115,7 @@ QHash<int, QByteArray> FrameModel::roleNames() const
         {FreshRole, "fresh"},
         {DeltaRole, "delta"},
         {MessageNameRole, "messageName"},
+        {MatchRole, "match"},
     });
     return names;
 }
@@ -132,6 +134,37 @@ QVariantList FrameModel::decodedSignals(int row) const
     const CanFrame &f = frameAt(row);
     const MessageDef *m = m_db->find(f.id, f.extended);
     return m ? Decoder::toVariantList(*m, f) : QVariantList{};
+}
+
+void FrameModel::setSearch(const FrameSearch &search)
+{
+    m_search = search;
+    if (count() > 0)
+        emit dataChanged(index(0, 0), index(count() - 1, ColumnCount - 1), {MatchRole});
+}
+
+int FrameModel::findMatch(int fromRow, bool forward) const
+{
+    const int n = count();
+    if (!m_search.isValid() || n == 0)
+        return -1;
+    for (int step = 1; step <= n; ++step) {
+        int row = forward ? fromRow + step : fromRow - step;
+        row = ((row % n) + n) % n; // wrap around once
+        if (m_search.matches(frameAt(row)))
+            return row;
+    }
+    return -1;
+}
+
+int FrameModel::matchCount() const
+{
+    if (!m_search.isValid())
+        return 0;
+    int matches = 0;
+    for (int row = 0; row < count(); ++row)
+        matches += m_search.matches(frameAt(row)) ? 1 : 0;
+    return matches;
 }
 
 void FrameModel::setCapacity(int capacity)

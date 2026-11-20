@@ -16,3 +16,6 @@ evidence/
 .vscode/
 .idea/
 .qtcreator/
+
+# Machine-specific Claude Code settings (local toolchain paths)
+.claude/settings.local.json

@@ -1,12 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(D:/Qt/Qt6.12/Tools/CMake_64/bin/cmake.exe:*)",
-      "Bash(D:/Qt/Qt6.12/Tools/CMake_64/bin/ctest.exe:*)",
-      "Bash(D:/Qt/Qt6.12/Tools/Ninja/ninja.exe:*)",
-      "Bash(/d/Qt/Qt6.12/Tools/CMake_64/bin/cmake.exe:*)",
-      "Bash(/d/Qt/Qt6.12/Tools/CMake_64/bin/ctest.exe:*)",
-      "Bash(/d/Qt/Qt6.12/Tools/Ninja/ninja.exe:*)",
       "Bash(cmake:*)",
       "Bash(ctest:*)",
       "Bash(ninja:*)",

@@ -6,7 +6,8 @@ This is a personal project, completely independent from any employer.
 - No real CAN hardware, drivers, DBC files, captures, tool configs or specs from any
   work source. All frames are simulated with invented IDs and names.
 - Do not read files outside this project folder and the toolchain folders
-  (`D:\Qt\Qt6.12\...`, the Visual Studio install found via vswhere).
+  (the Qt installation that `QT_ROOT` points to, and the Visual Studio install found via
+  vswhere).
 - No network access, no accounts, no telemetry, no downloads. Only the
   already-installed toolchain. Never install anything or modify PATH globally.
 - Never hard-code machine paths in tracked files. Use `CMakePresets.json` with the

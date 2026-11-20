@@ -95,6 +95,13 @@ Card {
                 }
                 IconButton {
                     Layout.alignment: Qt.AlignTop
+                    iconName: "plot"
+                    checked: Session.plotModel.seriesCount >= 0 && Session.plotModel.containsSignal(panel.signalId)
+                    tip: qsTr("Plot this signal (Plots tab)")
+                    onClicked: Session.plotModel.addSignal(panel.signalId, -1)
+                }
+                IconButton {
+                    Layout.alignment: Qt.AlignTop
                     iconName: panel.details.pinned ? "pin-filled" : "pin"
                     checked: !!panel.details.pinned
                     tip: panel.details.pinned ? qsTr("Unpin") : qsTr("Pin to the top")

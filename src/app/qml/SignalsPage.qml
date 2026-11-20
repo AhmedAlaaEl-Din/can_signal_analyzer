@@ -314,10 +314,23 @@ Item {
                                 Item {
                                     width: page.nameWidth(row.width)
                                     height: parent.height
+                                    IconButton {
+                                        id: plotButton
+                                        anchors.right: parent.right
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        extent: 24
+                                        iconSize: 13
+                                        iconName: "plot"
+                                        readonly property bool plotted: Session.plotModel.seriesCount >= 0 && Session.plotModel.containsSignal(row.signalId)
+                                        checked: plotted
+                                        opacity: plotted || rowHover.hovered || row.selected ? 1 : 0
+                                        tip: plotted ? qsTr("Plotted (add to another lane)") : qsTr("Plot this signal")
+                                        onClicked: Session.plotModel.addSignal(row.signalId, -1)
+                                    }
                                     Text {
                                         id: nameText
                                         anchors.verticalCenter: parent.verticalCenter
-                                        width: Math.min(implicitWidth, parent.width)
+                                        width: Math.min(implicitWidth, parent.width - 30)
                                         text: row.name
                                         elide: Text.ElideRight
                                         color: row.selected ? Theme.accentText : Theme.text
@@ -328,7 +341,7 @@ Item {
                                     Text {
                                         anchors.left: nameText.right
                                         anchors.leftMargin: Theme.space.sm
-                                        anchors.right: parent.right
+                                        anchors.right: plotButton.left
                                         anchors.verticalCenter: parent.verticalCenter
                                         visible: row.pinnedSection
                                         text: row.messageName

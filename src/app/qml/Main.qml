@@ -20,6 +20,9 @@ ApplicationWindow {
     font.pixelSize: Theme.type.body
 
     property int currentTab: 0
+    // In the deterministic --demo capture the real mouse must not leak into the
+    // frames (hover crosshair, hover-only controls).
+    property bool demoMode: false   // set by the DemoDirector
     // Show message names instead of hex IDs (only meaningful with a database).
     property bool namesPreferred: true
     readonly property bool showNames: namesPreferred && Session.database.loaded
@@ -82,6 +85,12 @@ ApplicationWindow {
                         badge: Session.database.loaded ? Session.signalModel.signalCount.toString() : ""
                         width: implicitWidth
                     }
+                    TabButton {
+                        text: qsTr("Plots")
+                        iconName: "plot"
+                        badge: Session.plotModel.seriesCount > 0 ? Session.plotModel.seriesCount.toString() : ""
+                        width: implicitWidth
+                    }
                 }
                 Item { Layout.fillWidth: true }
                 DatabaseBar {
@@ -114,6 +123,12 @@ ApplicationWindow {
                 anchors.fill: parent
                 active: window.currentTab === 2
             }
+            PlotsPage {
+                id: plotsPage
+                anchors.fill: parent
+                active: window.currentTab === 3
+                demoMode: window.demoMode
+            }
         }
     }
 
@@ -127,6 +142,7 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+1"; onActivated: window.currentTab = 0 }
     Shortcut { sequence: "Ctrl+2"; onActivated: window.currentTab = 1 }
     Shortcut { sequence: "Ctrl+3"; onActivated: window.currentTab = 2 }
+    Shortcut { sequence: "Ctrl+4"; onActivated: window.currentTab = 3 }
     Shortcut {
         sequences: [StandardKey.Find]
         onActivated: {
@@ -150,6 +166,8 @@ ApplicationWindow {
                 pages.forceActiveFocus()
             else if (window.currentTab === 2 && signalsPage.selectedSignal >= 0)
                 signalsPage.selectedSignal = -1
+            else if (window.currentTab === 3 && Session.plot.hasCursors)
+                Session.plot.clearCursors()
             else
                 Session.clearFilter()
         }
@@ -186,6 +204,36 @@ ApplicationWindow {
         }
         case "closeSignal": signalsPage.selectedSignal = -1; break
         case "expandMessage": messagesPage.toggleExpanded(String(arg)); break
+        // ---- plots (arguments are "a@b@c" strings) ----
+        case "plotAdd": {
+            const p = String(arg).split("@"), n = p[0].split(".")
+            plotsPage.addSignalByName(n[0], n[1], p.length > 1 ? Number(p[1]) : -1)
+            break
+        }
+        case "plotWindow": Session.plot.windowSeconds = Number(arg); Session.plot.follow(); break
+        case "plotZoom": { const p = String(arg).split("@"); Session.plot.zoomAt(Number(p[1]), Number(p[0])); break }
+        case "plotPan": Session.plot.panByFraction(Number(arg)); break
+        case "plotFollow": Session.plot.follow(); break
+        case "plotCursors": if (arg === "clear") Session.plot.clearCursors(); else Session.plot.placeCursors(); break
+        case "plotCursor": {
+            const p = String(arg).split("@")
+            Session.plot.setCursor(Number(p[0]), Session.plot.viewStartUs + Number(p[1]) * (Session.plot.viewEndUs - Session.plot.viewStartUs))
+            break
+        }
+        case "plotToggle": {
+            const p = String(arg).split("@"), n = p[1].split(".")
+            Session.plotModel.toggleVisible(Number(p[0]), Session.signalModel.signalIdByName(n[0], n[1]))
+            break
+        }
+        case "plotThreshold": { const p = String(arg).split("@"); Session.plotModel.addThreshold(Number(p[0]), Number(p[1])); break }
+        case "plotThresholdMove": {
+            const p = String(arg).split("@")
+            Session.plotModel.setThreshold(Number(p[0]), Number(p[1]), Number(p[2]))
+            break
+        }
+        case "plotExportPng": plotsPage.exportPng(arg); break
+        case "plotExportCsv": plotsPage.exportCsv(arg); break
+        case "plotHover": plotsPage.hoverX = Number(arg) < 0 ? -1 : Number(arg) * plotsPage.plotWidth; break
         default: console.warn("unknown demo action", name)
         }
     }

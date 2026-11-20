@@ -1,6 +1,7 @@
 #include "signallistmodel.h"
 
 #include "signalcodec.h"
+#include "timeseriesstore.h"
 
 #include <algorithm>
 
@@ -142,6 +143,8 @@ void SignalListModel::setDatabase(std::shared_ptr<const Database> db)
         }
     }
     m_nowUs = 0;
+    if (m_store)
+        m_store->reset(static_cast<int>(m_signals.size()));
     rebuildRows();
     endResetModel();
     emit structureChanged();
@@ -329,6 +332,8 @@ void SignalListModel::update(const CanFrame *frames, std::size_t n)
             s.raw = d.raw;
             s.outOfRange = d.outOfRange;
             pushSample(s, f.timestampUs, d.physical);
+            if (m_store)
+                m_store->append(id, f.timestampUs, d.physical);
             const int row = m_rowOfSignal[static_cast<std::size_t>(id)];
             if (row >= 0) {
                 firstRow = firstRow < 0 ? row : std::min(firstRow, row);
@@ -336,6 +341,8 @@ void SignalListModel::update(const CanFrame *frames, std::size_t n)
             }
         }
     }
+    if (m_store)
+        m_store->commit();
     if (firstRow >= 0)
         emit dataChanged(index(firstRow), index(lastRow),
                          {HasValueRole, ValueRole, PhysicalRole, EnumTextRole, RawRole, MinRole, MaxRole,
@@ -358,6 +365,8 @@ void SignalListModel::clearValues()
         m.data = {};
     }
     m_nowUs = 0;
+    if (m_store)
+        m_store->clear();
     if (!m_rows.empty())
         emit dataChanged(index(0), index(rowCount() - 1));
     emit timeChanged();

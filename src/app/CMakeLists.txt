@@ -6,6 +6,7 @@ add_subdirectory(style)
 qt_add_executable(can_analyzer WIN32 MACOSX_BUNDLE
     main.cpp
     demodirector.h demodirector.cpp
+    plotbench.h plotbench.cpp
 )
 
 qt_add_qml_module(can_analyzer
@@ -26,9 +27,12 @@ qt_add_qml_module(can_analyzer
         qml/DecodedGrid.qml
         qml/DatabaseBar.qml
         qml/DatabaseErrorBanner.qml
+        qml/PlotsPage.qml
+        qml/PlotLane.qml
         qml/format.js
     SOURCES
         sparkline.h sparkline.cpp
+        plotcanvas.h plotcanvas.cpp
 )
 
 target_compile_definitions(can_analyzer PRIVATE CAN_ANALYZER_VERSION="${PROJECT_VERSION}")

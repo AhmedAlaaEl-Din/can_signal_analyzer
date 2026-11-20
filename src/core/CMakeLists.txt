@@ -17,6 +17,10 @@ qt_add_library(can_core STATIC
     vehiclemodel.h vehiclemodel.cpp
     signaldatabase.h signaldatabase.cpp
     signallistmodel.h signallistmodel.cpp
+    timeseriesstore.h timeseriesstore.cpp
+    plotmath.h plotmath.cpp
+    plotmodel.h plotmodel.cpp
+    plotcontroller.h plotcontroller.cpp
 )
 
 # The invented sample database, available as :/can/demo_vehicle.dbc

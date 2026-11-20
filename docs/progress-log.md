@@ -1,5 +1,83 @@
 # Progress log
 
+## Summary (Phase 3, unattended run, 2026-11-19 10:50 → 11:45)
+
+**Done** (branch `phase3-plots`, from `phase2-decoding`; not pushed, not merged)
+- **Simulator fixes:** torque follows throttle and an rpm torque curve (engine braking when
+  coasting), load follows torque, throttle varies while accelerating and cruising, nothing
+  sits clamped at a range limit; new tests check that every analog signal varies over 60 s and
+  never stays at a DBC limit for more than 6 s. Sparklines scale to their visible range.
+- **Time-series store** (core, Qt Core only): ring buffer per signal, 10 min history, min/max
+  decimation per pixel column (spikes never lost) with 64-sample block summaries.
+- **Plot engine:** custom scene-graph item `PlotCanvas` (thick AA lines via triangle strips +
+  4× MSAA, gradient fill, min/max band, step plots, dash cue), chosen by benchmark.
+- **Plots tab:** stacked lanes on one time axis; add via +, drag and drop, or Plot buttons in
+  the Signals tab/detail panel; remove/reorder/resize lanes; per-unit left/right axes;
+  colour-blind-safe palette; legend with live values (toggle, dash cue, remove); enum step
+  plots with state labels; follow live 5/10/30/60 s, wheel zoom, drag pan, double-click
+  reset, Y lock; crosshair tooltip; cursors A/B with Δt, frequency and value deltas;
+  draggable thresholds; pause without data loss; PNG and CSV export; empty states,
+  friendly export errors, shortcuts (F, +, −, 0, C, Esc, Ctrl+4); short animations.
+- **Tests:** 14 suites via CTest, **all passing, 197 checks** (new: `tst_timeseries` 15 incl.
+  performance smoke test, `tst_plotmath` 13, `tst_plotmodel` 8, `tst_vehiclesim` +2).
+  Clean rebuild with `/W4`: **0 warnings**.
+- **Demo capture:** deterministic 12 fps Plots scene, 541 JPEG frames (application window only,
+  1280 × 800, quality 80), 6 named PNG screenshots, `evidence/frames.zip` = 40.6 MB.
+- **Design review:** 3 rounds (`docs/decisions.md`); found and fixed real bugs (real mouse
+  leaking into the capture, cursors/tooltip not following scrolling, a Behavior that froze the
+  axis while following live, mixed units on one axis). Final capture after round 3.
+- **Docs:** README (plot features, architecture with store and engine, performance table,
+  screenshot placeholders, demo, roadmap), `docs/phase3-explained.md`.
+- **Scan** of tracked files: no machine paths, names, emails or secrets.
+
+**Plot engine and benchmark** (8 signals × 10,000 visible points, 4 lanes, 1280 × 800 at
+125 %, D3D11, 4× MSAA; `can_analyzer --plot-bench`, `can_charts_bench`):
+
+| Engine | fps | p95 frame |
+|---|---|---|
+| **Custom scene graph + min/max decimation (chosen)** | **60.0** (vsync) | 17.8 ms |
+| Custom scene graph, all 80k raw points | 51.5 | 32.0 ms |
+| Qt Charts, useOpenGL | 36.2 | 36.2 ms |
+| Qt Charts, raster | 2.7 | 439 ms |
+
+Qt Graphs is **not installed** on this machine (installing was not allowed), so Qt Charts was
+the installed comparison (see needs-me).
+
+**Blocked**: nothing.
+
+**Needs me**: see `docs/needs-me.md` (review branch, video from the frames, optional Qt
+Graphs comparison, optional README screenshots, try drag-and-drop and the export dialogs by
+hand).
+
+**Where things are**
+- Screenshots: `evidence/screenshots/01-plots-live-dark.png` … `06-plots-tooltip-light.png`
+- Frames: `evidence/frames/frame_0000.jpg` … `frame_0540.jpg` (12 fps); zip `evidence/frames.zip`
+- Benchmarks: `evidence/plot-bench-sg.txt`, `evidence/plot-bench-charts.txt`
+- Edge cases: `evidence/checks/*.png` (incl. `export-plot.png`), `evidence/export-visible-range.csv`
+
+**How to build and run**
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run.ps1          # build, deploy, start
+build\local-release\can_analyzer.exe --demo --rate 1000         # re-capture the demo
+build\local-release\can_analyzer.exe --plot-bench bench.txt     # plot benchmark
+powershell -ExecutionPolicy Bypass -File tools\zip-frames.ps1    # zip the frames
+```
+In the app: *Load demo database* → Plots tab (Ctrl+4) → click + next to signals.
+
+**Risks / known limitations**
+- Qt Graphs was not benchmarked (not installed).
+- Drag and drop and the PNG/CSV save dialogs could not be operated by hand in an unattended
+  run; the drop handlers and both exports were exercised programmatically (layout check).
+- Per-unit scaling supports a left and a right axis; a third unit in one lane is scaled on its
+  own without an axis.
+- Quantised signals (e.g. throttle in 0.4 % steps) show visible stairs when zoomed in far;
+  that is the real data.
+- Demo capture JPEG quality is 80 (85 exceeded 60 MB).
+- The store keeps 10 minutes per signal; at 2000 fr/s with many plotted-or-not signals memory
+  grows to tens of MB (all signals of the database are recorded).
+
+---
+
 ## Summary (Phase 2, unattended run, 2026-11-19 09:16 → 09:55)
 
 **Done** (branch `phase2-decoding`, from `phase1-foundation`; not pushed, not merged)
@@ -157,3 +235,13 @@ powershell -ExecutionPolicy Bypass -File tools\zip-frames.ps1
 | 2026-11-19 09:44 | Design review rounds 1–2: sparkline envelope, bit layout above the fold, demo pause, chevrons, JPEG budget. |
 | 2026-11-19 09:47 | Design review round 3: minimum-size Signals layout fixed; final capture 541 frames, zip 38.2 MB. Committed. |
 | 2026-11-19 09:55 | Docs (README, phase2-explained, decisions), clean rebuild 0 warnings, 11/11 suites (159 checks), scan clean. |
+| 2026-11-19 10:50 | Phase 3 started: branch `phase3-plots` from `phase2-decoding`; Qt Graphs found not installed. |
+| 2026-11-19 10:56 | Simulator realism fix + variation tests; sparkline scaling. Committed. |
+| 2026-11-19 11:00 | TimeSeriesStore with decimation, plotmath, PlotModel, PlotController + 3 test suites (14 suites pass). Committed. |
+| 2026-11-19 11:06 | PlotCanvas scene-graph engine; benchmarks: 60.0 fps custom vs 36.2 fps Qt Charts (OpenGL). Committed. |
+| 2026-11-19 11:13 | Plots tab UI (lanes, picker, cursors, thresholds, export); deterministic plots demo. |
+| 2026-11-19 11:18 | Design review round 1: picker, per-unit axes, enum ticks. |
+| 2026-11-19 11:20 | Design review round 2: measurement bar, tick/unit collisions, lane controls, JPEG q80. |
+| 2026-11-19 11:30 | Design review round 3: demo mode ignores the real mouse, threshold badges, cursor/tooltip bindings, axis smoothing fix. |
+| 2026-11-19 11:37 | Final capture (541 frames, zip 40.6 MB), clean rebuild 0 warnings, 14/14 suites. Committed. |
+| 2026-11-19 11:45 | Export check, docs (README, phase3-explained, decisions), scan clean, summary. |

@@ -25,3 +25,15 @@ Items that need the owner's attention or decision. Nothing is blocking.
 8. **README screenshots:** done (Signals and Signal detail, dark, in `docs/img/`).
 9. **Try the file dialog once by hand** (*Open DBC…* / Ctrl+O): it could not be clicked in an
    unattended run; the loading code behind it is tested.
+
+## Phase 3
+10. **Review branch `phase3-plots`** (not pushed, not merged).
+11. **Video:** `evidence/frames.zip` holds 541 JPEG frames at exactly 12 fps (1280 × 800).
+    `ffmpeg -framerate 12 -i frame_%04d.jpg -c:v libx264 -pix_fmt yuv420p demo.mp4`.
+12. **Qt Graphs comparison (optional):** Qt Graphs is not installed here, so the benchmark
+    compared the custom engine with Qt Charts. If you want the Graphs numbers, install the
+    "Qt Graphs" module with the Qt Maintenance Tool; I did not install anything.
+13. **Try by hand once:** dragging a signal from the Plots picker onto a lane, and the PNG/CSV
+    save dialogs (both exports were verified programmatically, not through the dialogs).
+14. ~~README screenshots~~ — done: `docs/img/plots-cursors-dark.png`, `docs/img/plots-tooltip-light.png`.
+

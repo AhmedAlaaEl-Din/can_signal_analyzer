@@ -1,6 +1,7 @@
 #include "capturesession.h"
 #include "framemodel.h"
 #include "demodirector.h"
+#include "plotbench.h"
 #include "simulatedsource.h"
 
 #include <QCommandLineParser>
@@ -11,6 +12,7 @@
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QSurfaceFormat>
 #include <QTimer>
 #include <QtQml/qqmlextensionplugin.h>
 
@@ -50,6 +52,12 @@ int main(int argc, char *argv[])
         if (qstrcmp(argv[i], "--demo") == 0)
             qputenv("QSG_RENDER_LOOP", "basic");
     }
+    // 4x MSAA for the whole window: plot lines (triangle geometry) get smooth,
+    // anti-aliased edges without per-vertex feathering.
+    QSurfaceFormat format = QSurfaceFormat::defaultFormat();
+    format.setSamples(4);
+    QSurfaceFormat::setDefaultFormat(format);
+
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("CAN Analyzer"));
     QGuiApplication::setApplicationVersion(QStringLiteral(CAN_ANALYZER_VERSION));
@@ -75,8 +83,13 @@ int main(int argc, char *argv[])
     const QCommandLineOption capacityOption(QStringLiteral("capacity"),
                                             QStringLiteral("Trace ring-buffer capacity in frames."),
                                             QStringLiteral("frames"), QString::number(can::FrameModel::kDefaultCapacity));
-    parser.addOptions({demoOption, checkOption, outOption, seedOption, rateOption, capacityOption});
+    const QCommandLineOption benchOption(QStringLiteral("plot-bench"),
+                                         QStringLiteral("Run the plot rendering benchmark and write the results to <file>."),
+                                         QStringLiteral("file"));
+    parser.addOptions({demoOption, checkOption, outOption, seedOption, rateOption, capacityOption, benchOption});
     parser.process(app);
+    if (parser.isSet(benchOption))
+        return runPlotBench(parser.value(benchOption));
 
     const bool demo = parser.isSet(demoOption) || parser.isSet(checkOption);
     const QString evidenceDir = QDir(parser.value(outOption)).absolutePath();

@@ -118,6 +118,20 @@ QtObject {
     readonly property color shadow: Qt.rgba(0, 0, 0, light.shadow + (darkPalette.shadow - light.shadow) * t)
     readonly property color highlightChange: alpha(warning, 0.15 + 0.01 * t)
 
+    // Plot series palette: colour-blind-safe (Okabe–Ito family), tuned per theme.
+    // Line contrast vs. the card surface: light 3.9–6.2:1, dark 6.5–13.4:1.
+    readonly property list<color> _plotLight: ["#0072B2", "#B86E00", "#00866A", "#8C7A00", "#B0558C", "#D55E00", "#5B4FC9", "#5B6475"]
+    readonly property list<color> _plotDark: ["#56B4E9", "#E69F00", "#3FC1A0", "#F0E442", "#E08AB8", "#F5853F", "#9D8CFF", "#AEB6C4"]
+    readonly property var plotPalette: {
+        const out = []
+        for (let i = 0; i < _plotLight.length; ++i)
+            out.push(blend(_plotLight[i], _plotDark[i]))
+        return out
+    }
+    function plotColor(i) { return plotPalette[((i % 8) + 8) % 8] }
+    readonly property color gridLine: alpha(_ink, 0.055)
+    readonly property color gridLineStrong: alpha(_ink, 0.10)
+
     function toneColor(tone) {
         switch (tone) {
         case "accent": return accentText

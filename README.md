@@ -6,7 +6,8 @@ professional bus tool. C++20 core, Qt 6 Quick/QML front end, custom design syste
 There is **no hardware** in this project: frames come from a built-in, seeded simulator.
 Phase 2 adds a signal database: load a DBC file (or the bundled, invented
 `demo_vehicle.dbc`) and frames are decoded into named signals with physical values, units
-and value-table text. Later phases add plots, logging and replay.
+and value-table text. Phase 3 adds live signal plots: stacked lanes on one time axis, zoom
+and pan, cursors with deltas, thresholds and export. Later phases add logging and replay.
 
 ## Screenshots
 
@@ -31,6 +32,14 @@ display scaling, 2000 simulated frames/s).
 |---|---|
 | ![Signals tab, dark theme](docs/img/signals-dark.png) | ![Signal detail with bit layout, dark theme](docs/img/signal-detail-dark.png) |
 | **Signals**: grouped by message, live values, 10 s sparklines, pinned signals on top | **Signal detail**: live value and chart, bit layout of the 8 data bytes (MSB solid, LSB outlined), definition |
+
+**Phase 3 (plots):** `--demo` now records the Plots tab
+(`evidence/screenshots/01-plots-live-dark` … `06-plots-tooltip-light`).
+
+| | |
+|---|---|
+| ![Plots with cursors A/B and crosshair tooltip, dark theme](docs/img/plots-cursors-dark.png) | ![Plots with crosshair tooltip and threshold badge, light theme](docs/img/plots-tooltip-light.png) |
+| **Plots**: stacked lanes on one time axis, per-unit left/right axes, cursors A/B with Δt, frequency and per-signal deltas | **Plots, light theme**: crosshair tooltip with every visible value, dashed second series, threshold badge, gear as a step plot |
 
 Demo video: _link to be added_
 
@@ -63,8 +72,20 @@ Demo video: _link to be added_
   sender/receivers, comment, value table and a **bit layout** of the 8 data bytes showing which
   bits the signal occupies (MSB/LSB marked, live bit values).
 - **Demo vehicle**: the simulator can drive the demo database with plausible physics (speed
-  ramps, rpm follows speed and gear, slow coolant warm-up, steering sweep, brake events);
-  the phase 1 random patterns remain available as "Raw patterns".
+  ramps, rpm follows speed and gear, torque follows throttle and the torque curve, slow
+  coolant warm-up, steering sweep, brake events); the phase 1 random patterns remain
+  available as "Raw patterns".
+- **Live plots** (Plots tab): stacked lanes sharing one time axis, several signals per lane,
+  per-unit left/right axes, a colour-blind-safe palette with a dash pattern as second cue,
+  soft gradient fill, faint grid, step plots with state labels for enumerations.
+  - Add signals with **+**, by **drag and drop** from the picker, or with **Plot** in the
+    Signals tab / detail panel; remove, reorder and resize lanes.
+  - **Follow live** with 5/10/30/60 s windows; mouse-wheel zoom, drag to pan, double-click
+    to reset; Y autoscale per lane with a lock.
+  - **Crosshair** tooltip with every visible value; **cursors A/B** with Δt, frequency and
+    value deltas; draggable **threshold** lines.
+  - **Min/max band** when zoomed out (decimation never loses a spike); 10 minutes of history.
+  - Pause freezes the view without losing data; **PNG** and **CSV** export.
 - **Design**: dark and light themes with an animated switch, custom-styled controls,
   hand-drawn icons, WCAG AA contrast, keyboard shortcuts, empty states.
 
@@ -78,7 +99,9 @@ Demo video: _link to be added_
 | Ctrl+F | Focus the ID filter (Signals tab: the search box) |
 | Esc | Leave a filter field / reset the filter |
 | End | Jump to the live end of the trace |
-| Ctrl+1 / Ctrl+2 / Ctrl+3 | Trace / Messages / Signals tab |
+| Ctrl+1 … Ctrl+4 | Trace / Messages / Signals / Plots tab |
+| F / + / − / 0 | Plots: follow live / zoom in / zoom out / reset view |
+| C / Esc | Plots: place measurement cursors / clear them |
 | Ctrl+O | Open a DBC file |
 | Ctrl+N | Toggle message names / hex IDs |
 | Ctrl+T | Toggle dark / light theme |
@@ -99,14 +122,20 @@ flowchart LR
         S --> ST["BusStatistics"]
         S --> FM["FrameModel<br/>ring buffer 100k + filter"]
         S --> MO["MessageOverviewModel"]
-        S --> SL["SignalListModel<br/>live values + 10 s history"]
+        S --> SL["SignalListModel<br/>live values + sparklines"]
         DB --> D["Decoder<br/>(signal codec)"]
         D --> FM
         D --> MO
         D --> SL
+        SL --> TS["TimeSeriesStore<br/>ring per signal, 10 min,<br/>min/max decimation"]
+        TS --> PC["PlotController<br/>time axis, follow live,<br/>cursors, CSV"]
+        TS --> PE["PlotCanvas<br/>scene-graph plot engine"]
+        PM["PlotModel<br/>lanes x signals"] --> PE
+        PC --> PE
         FM --> QT["Trace"]
         MO --> QM["Messages"]
-        SL --> QS["Signals + sparklines<br/>+ detail / bit layout"]
+        SL --> QS["Signals"]
+        PE --> QP["Plots"]
     end
 ```
 
@@ -114,12 +143,33 @@ flowchart LR
   `FrameSource` / `SimulatedSource` / `SimulatorEngine` / `VehicleModel`, `FrameFilter`,
   `BusStatistics`, `FrameModel`, `MessageOverviewModel`, `CaptureSession`, and for phase 2
   `DbcParser` / `Database` (`dbc.*`), the signal codec and `Decoder` (`signalcodec.*`),
-  `SignalDatabase` and `SignalListModel`. The demo database is a resource of this library.
+  `SignalDatabase` and `SignalListModel`, and for phase 3 `TimeSeriesStore`, `plotmath`,
+  `PlotModel` and `PlotController`. The demo database is a resource of this library.
+- `src/app/plotcanvas.*` — the scene-graph plot engine (C++ `QQuickItem`).
+- `bench/` — optional Qt Charts comparison benchmark (`can_charts_bench`).
 - `src/app/ui/` — module `CanUi`: the `Theme` token singleton, icons and components.
 - `src/app/style/` — module `CanStyle`: the custom Qt Quick Controls style.
 - `src/app/qml/` — module `CanAnalyzer`: the screens.
 - `tests/` — Qt Test suites run by CTest.
 - `docs/` — design system, decisions, progress log, plain-English explainer.
+
+## Plot performance
+
+Measured on the development machine (Windows 11, Direct3D 11, 1280 × 800 window at 125 %
+scaling, 4× MSAA): 8 signals at 1000 Hz each (≈ the decoded output of 2000 frames/s), 10 s
+window = **10,000 visible points per signal**, 4 lanes.
+
+| Engine | fps | p95 frame time |
+|---|---|---|
+| **PlotCanvas** (custom scene graph, min/max decimation — used by the app) | **60.0** (vsync) | 17.8 ms |
+| PlotCanvas drawing all 80,000 raw points | 51.5 | 32.0 ms |
+| Qt Charts, `useOpenGL: true` | 36.2 | 36.2 ms |
+| Qt Charts, raster | 2.7 | 439 ms |
+
+Reproduce: `can_analyzer --plot-bench result.txt` and `can_charts_bench result.txt`.
+Qt Graphs was not installed on the development machine, so it is not part of the
+comparison. Decimation of 8 × 60,000 samples (10 minutes at 100 Hz) to 1200 pixel columns
+takes about 3 ms per frame.
 
 ## Signal databases
 
@@ -286,43 +336,46 @@ can_analyzer.exe --demo --rate 1000
 powershell -ExecutionPolicy Bypass -File tools\zip-frames.ps1
 ```
 
-`--demo` plays a scripted, **deterministic** scene of 45 s: live trace, loading the demo
-database, a decoded trace frame, expanded Messages rows, the Signals tab with search and
-pins, the signal detail with its bit layout, a theme switch and back. It saves:
+`--demo` plays a scripted, **deterministic** scene of 45 s on the Plots tab: load the demo
+database, add speed + rpm, throttle + torque, steering and the gear as a step plot, follow
+live with different windows, zoom in, pan, place cursors A and B (delta readout), show the
+crosshair tooltip, toggle a legend entry, drag a threshold line, a 30 s window with the
+min/max band, pause, and the light theme. It saves:
 
 - `evidence/frames/frame_NNNN.jpg` — 541 JPEG frames at exactly **12 fps** (1280 × 800,
-  quality 85). Simulated time, the script and every QML animation advance by exactly 1/12 s
-  per frame (manual clock + custom animation driver), so playback is smooth even though
-  capturing runs at whatever speed the machine renders.
-- `evidence/screenshots/01…06-*.png` — six named screenshots of the main screens.
+  quality 80). Simulated time, the script and every QML animation advance by exactly 1/12 s
+  per frame (manual clock + custom animation driver), and the real mouse is ignored, so
+  playback is smooth and reproducible.
+- `evidence/screenshots/01…06-*.png` — six named screenshots.
 - `evidence/demo-log.txt` — progress and sizes.
 
-Only the application window is captured (`QQuickWindow::grabWindow` renders the window's
-own scene graph), never the desktop. `tools/zip-frames.ps1` packs the frames into
-`evidence/frames.zip` (about 38 MB). Assemble a video with any tool, e.g.
-`ffmpeg -framerate 12 -i frame_%04d.jpg -c:v libx264 -pix_fmt yuv420p demo.mp4`.
-`--layout-check` captures edge cases (no database, a broken DBC file, minimum window size,
-multiplexed message, raw mode) into `evidence/checks/`. `evidence/` is git-ignored.
+Only the application window is captured (`QQuickWindow::grabWindow`), never the desktop.
+`tools/zip-frames.ps1` packs the frames into `evidence/frames.zip` (about 41 MB). Assemble a
+video with any tool, e.g. `ffmpeg -framerate 12 -i frame_%04d.jpg -c:v libx264 -pix_fmt
+yuv420p demo.mp4`. `--layout-check` captures edge cases (no database, a broken DBC file,
+minimum window size incl. plots, multiplexed message, raw mode, PNG/CSV export) into
+`evidence/checks/`. `evidence/` is git-ignored.
 
 ## Roadmap
 
-1. ~~**Decoding**~~ — done in phase 2: DBC subset, decoder, signal list, bit layout.
-2. **Plots**: live multi-signal charts with cursors and zoom (the signal history and
-   sparkline renderer are the starting point).
+1. ~~**Decoding**~~ — phase 2: DBC subset, decoder, signal list, bit layout.
+2. ~~**Plots**~~ — phase 3: live lanes, cursors, thresholds, decimation, export.
 3. **Logging**: record to an open log format with triggers and pre-trigger buffer.
 4. **Replay**: a `FrameSource` that replays logs at 1×/n× speed; the rest of the app is
-   already source-agnostic.
+   already source-agnostic (the plots will scroll through replayed time unchanged).
 5. More DBC: extended multiplexing, float signals, CAN FD; hardware adapters behind the same
-   `FrameSource` interface.
+   `FrameSource` interface; X-Y plots and FFT.
 
 ## Licensing
 
 - Qt is used under the open-source **GNU LGPL v3**, **dynamically linked** (the Qt DLLs
   are separate files and can be replaced by the user). No Qt source code is modified.
 - Qt modules used: **Qt Core, Qt Gui, Qt Qml, Qt Quick, Qt Quick Controls 2** (incl.
-  Templates and the Basic fallback style), **Qt Quick Dialogs** (file dialog), **Qt Quick
-  Effects** (shadows, via the `QtQuick.Effects` QML module), **Qt Svg** (icon rendering), and
-  **Qt Test** (tests only).
+  Templates and the Basic fallback style), **Qt Quick Dialogs** (file dialogs), **Qt Quick
+  Shapes** (dashed threshold lines), **Qt Quick Effects** (shadows, via the `QtQuick.Effects`
+  QML module), **Qt Svg** (icon rendering), and **Qt Test** (tests only). The optional
+  `can_charts_bench` benchmark additionally uses **Qt Charts** and **Qt Widgets**; it is not
+  part of the application.
 - Fonts are not shipped: the app uses Segoe UI Variable / Cascadia Mono already installed
   with Windows.
 - No proprietary code, data, DBC files, captures or configurations are included. All CAN

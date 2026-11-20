@@ -2,6 +2,11 @@
 
 #include "canframe.h"
 
+#include <QString>
+
+#include <memory>
+#include <utility>
+
 #include <array>
 #include <cstdint>
 #include <vector>
@@ -35,12 +40,19 @@ private:
 // Deterministic CAN traffic generator. Pure logic: no threads, no event loop.
 // The same seed and the same advanceTo() end time always produce exactly the
 // same frames, independent of how the time span is chunked into calls.
+class Database;
+class VehicleModel;
+
 class SimulatorEngine
 {
 public:
+    // Raw: 12 invented IDs with synthetic byte patterns (phase 1).
+    // Vehicle: the messages of the bundled demo_vehicle.dbc, filled from a
+    //          physical vehicle model so that decoded values look real.
+    enum class Mode { Raw, Vehicle };
     enum class Pattern { Counter, Sine, RandomWalk, BitFlags, VariableLength };
 
-    struct MessageDef
+    struct RawMessageDef
     {
         std::uint32_t id;
         bool extended;
@@ -58,12 +70,21 @@ public:
     static constexpr int kBurstSpacingUs = 250;
     static constexpr int kMaxRate = 5000;
 
-    explicit SimulatorEngine(std::uint64_t seed = kDefaultSeed);
+    explicit SimulatorEngine(std::uint64_t seed = kDefaultSeed, Mode mode = Mode::Raw);
+    ~SimulatorEngine();
+    SimulatorEngine(const SimulatorEngine &) = delete;
+    SimulatorEngine &operator=(const SimulatorEngine &) = delete;
 
-    // The fixed table of invented messages.
-    static const std::vector<MessageDef> &messages();
-    // Sum of the nominal rates of all periodic messages (frames per second).
-    static double nominalRate();
+    // The fixed table of invented raw-mode messages.
+    static const std::vector<RawMessageDef> &messages();
+    // Sum of the nominal rates of the raw-mode messages (frames per second).
+    static double rawNominalRate();
+    // Nominal rate of the current mode.
+    double nominalRate() const;
+
+    Mode mode() const noexcept { return m_mode; }
+    // Switches the message set; time continues, schedules restart from now.
+    void setMode(Mode mode);
 
     // Target total rate in frames/s for the periodic traffic. 0 = nominal periods.
     void setTargetRate(int framesPerSecond);
@@ -76,13 +97,19 @@ public:
     std::uint64_t seed() const noexcept { return m_seed; }
     std::int64_t currentTimeUs() const noexcept { return m_nowUs; }
 
+    using Intended = std::vector<std::pair<QString, double>>;
+
     // Generates every frame due in (currentTime, endUs] in timestamp order and
-    // appends it to out. Returns the number of frames produced.
-    std::size_t advanceTo(std::int64_t endUs, std::vector<CanFrame> &out);
+    // appends it to out. Returns the number of frames produced. In vehicle mode,
+    // `intended` (optional) receives, per frame, the physical values encoded.
+    std::size_t advanceTo(std::int64_t endUs, std::vector<CanFrame> &out,
+                          std::vector<Intended> *intended = nullptr);
 
 private:
     struct MessageState
     {
+        int nominalPeriodMs = 0;
+        int dbIndex = -1;            // vehicle mode: index into the demo database
         std::int64_t nextDueUs = 0;
         std::int64_t periodUs = 0;
         std::uint32_t counter = 0;
@@ -90,13 +117,17 @@ private:
         std::uint8_t flags = 0;
     };
 
+    void buildSlots(bool stagger);
     void reschedulePeriods();
     CanFrame makeFrame(std::size_t index, std::int64_t tUs);
     CanFrame makeBurstFrame(std::int64_t tUs);
     std::int64_t jitterUs(std::int64_t periodUs);
 
     std::uint64_t m_seed;
+    Mode m_mode = Mode::Raw;
     SplitMix64 m_rng;
+    std::shared_ptr<const Database> m_db;
+    std::unique_ptr<VehicleModel> m_vehicle;
     std::vector<MessageState> m_state;
     std::int64_t m_nowUs = 0;
     int m_targetRate = 0;

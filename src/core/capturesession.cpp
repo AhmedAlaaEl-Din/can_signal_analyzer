@@ -2,6 +2,8 @@
 
 #include "framemodel.h"
 #include "messageoverviewmodel.h"
+#include "signaldatabase.h"
+#include "signallistmodel.h"
 #include "simulatedsource.h"
 
 #include <algorithm>
@@ -14,7 +16,10 @@ CaptureSession::CaptureSession(SimulatedSource *source, QObject *parent)
     , m_source(source)
     , m_frames(new FrameModel(this))
     , m_overview(new MessageOverviewModel(this))
+    , m_signalModel(new SignalListModel(this))
+    , m_database(new SignalDatabase(this))
 {
+    connect(m_database, &SignalDatabase::changed, this, &CaptureSession::applyDatabase);
     Q_ASSERT(m_source);
     if (!m_source->parent())
         m_source->setParent(this);
@@ -22,9 +27,11 @@ CaptureSession::CaptureSession(SimulatedSource *source, QObject *parent)
 
     connect(m_source, &FrameSource::framesReady, this, &CaptureSession::onFrames);
     connect(m_source, &FrameSource::runningChanged, this, [this](bool running) {
-        if (running) {
+        if (running && !m_manualTime) {
             m_flushTimer.start();
             m_statsTimer.start();
+        } else if (running) {
+            // manual time: the owner drives flush() / statistics
         } else {
             flush();
             m_flushTimer.stop();
@@ -34,6 +41,7 @@ CaptureSession::CaptureSession(SimulatedSource *source, QObject *parent)
     });
     connect(m_source, &SimulatedSource::targetRateChanged, this, &CaptureSession::targetRateChanged);
     connect(m_source, &SimulatedSource::burstsEnabledChanged, this, &CaptureSession::burstsEnabledChanged);
+    connect(m_source, &SimulatedSource::modeChanged, this, &CaptureSession::modeChanged);
 
     m_flushTimer.setInterval(kFlushIntervalMs);
     m_flushTimer.setTimerType(Qt::PreciseTimer);
@@ -110,7 +118,47 @@ void CaptureSession::setBurstsEnabled(bool enabled)
 
 double CaptureSession::nominalRate() const
 {
-    return SimulatorEngine::nominalRate();
+    return m_source->nominalRate();
+}
+
+bool CaptureSession::vehicleMode() const
+{
+    return m_source->vehicleMode();
+}
+
+void CaptureSession::setVehicleMode(bool vehicle)
+{
+    m_source->setVehicleMode(vehicle);
+}
+
+void CaptureSession::applyDatabase()
+{
+    const auto db = m_database->database();
+    m_frames->setDatabase(db);
+    m_overview->setDatabase(db);
+    m_signalModel->setDatabase(db);
+}
+
+qint64 CaptureSession::now() const
+{
+    return m_manualTime ? m_manualNowMs : m_clock.elapsed();
+}
+
+void CaptureSession::setManualTime(bool manual)
+{
+    m_manualTime = manual;
+    m_source->setManualClock(manual);
+    if (manual) {
+        m_flushTimer.stop();
+        m_statsTimer.stop();
+    }
+}
+
+void CaptureSession::manualTick(qint64 nowMs)
+{
+    m_manualNowMs = nowMs;
+    flush();
+    updateStatistics();
 }
 
 QString CaptureSession::sourceDescription() const
@@ -129,7 +177,7 @@ void CaptureSession::flush()
         return;
     std::vector<CanFrame> frames;
     frames.swap(m_incoming);
-    m_stats.add(frames.data(), frames.size(), m_clock.elapsed());
+    m_stats.add(frames.data(), frames.size(), now());
 
     if (m_paused) {
         m_parked.insert(m_parked.end(), frames.begin(), frames.end());
@@ -145,14 +193,15 @@ void CaptureSession::publish(const std::vector<CanFrame> &frames)
 {
     m_frames->append(frames);
     m_overview->update(frames);
+    m_signalModel->update(frames);
 }
 
 void CaptureSession::updateStatistics()
 {
-    const std::int64_t now = m_clock.elapsed();
-    m_stats.tick(now);
-    m_fps = m_stats.framesPerSecond(now);
-    m_busLoad = m_stats.busLoad(now);
+    const std::int64_t t = now();
+    m_stats.tick(t);
+    m_fps = m_stats.framesPerSecond(t);
+    m_busLoad = m_stats.busLoad(t);
     if (!isRunning() && m_fps < 0.5)
         m_statsTimer.stop();
     emit statisticsChanged();
@@ -164,6 +213,7 @@ void CaptureSession::clear()
     m_parked.clear();
     m_frames->clear();
     m_overview->clear();
+    m_signalModel->clearValues();
     m_stats.reset();
     m_fps = 0;
     m_busLoad = 0;
@@ -228,6 +278,16 @@ QObject *CaptureSession::frameModelObject() const
 QObject *CaptureSession::overviewModelObject() const
 {
     return m_overview;
+}
+
+QObject *CaptureSession::signalModelObject() const
+{
+    return m_signalModel;
+}
+
+QObject *CaptureSession::databaseObject() const
+{
+    return m_database;
 }
 
 } // namespace can

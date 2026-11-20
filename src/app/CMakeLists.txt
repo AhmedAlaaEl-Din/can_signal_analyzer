@@ -20,7 +20,15 @@ qt_add_qml_module(can_analyzer
         qml/TraceRow.qml
         qml/MessagesPage.qml
         qml/FloatingPill.qml
+        qml/SignalsPage.qml
+        qml/SignalDetail.qml
+        qml/BitLayout.qml
+        qml/DecodedGrid.qml
+        qml/DatabaseBar.qml
+        qml/DatabaseErrorBanner.qml
         qml/format.js
+    SOURCES
+        sparkline.h sparkline.cpp
 )
 
 target_compile_definitions(can_analyzer PRIVATE CAN_ANALYZER_VERSION="${PROJECT_VERSION}")

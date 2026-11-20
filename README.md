@@ -3,8 +3,10 @@
 A Windows desktop app that shows CAN bus traffic live, like the trace view of a
 professional bus tool. C++20 core, Qt 6 Quick/QML front end, custom design system.
 
-Phase 1 has **no hardware**: frames come from a built-in, seeded simulator with invented
-message IDs. Later phases add signal decoding, plots, logging and replay.
+There is **no hardware** in this project: frames come from a built-in, seeded simulator.
+Phase 2 adds a signal database: load a DBC file (or the bundled, invented
+`demo_vehicle.dbc`) and frames are decoded into named signals with physical values, units
+and value-table text. Later phases add plots, logging and replay.
 
 ## Screenshots
 
@@ -22,6 +24,14 @@ display scaling, 2000 simulated frames/s).
 
 **Messages, light**: the same overview in the light theme.
 
+**Phase 2 (signal database):** screenshots are produced by `--demo` in
+`evidence/screenshots/` (`01-trace-decoded-dark` … `06-signal-detail-light`).
+
+| | |
+|---|---|
+| ![Signals tab, dark theme](docs/img/signals-dark.png) | ![Signal detail with bit layout, dark theme](docs/img/signal-detail-dark.png) |
+| **Signals**: grouped by message, live values, 10 s sparklines, pinned signals on top | **Signal detail**: live value and chart, bit layout of the 8 data bytes (MSB solid, LSB outlined), definition |
+
 Demo video: _link to be added_
 
 ## Features
@@ -35,11 +45,26 @@ Demo video: _link to be added_
   keeps the last valid filter.
 - **Pause / resume** that freezes the view but keeps capturing; nothing is lost.
 - **Statistics**: frames/s, estimated bus load at 500 kbit/s, total frames, buffer fill.
-- **Simulator**: 12 invented messages (10–1000 ms periods), counters, slow sines, random
-  walks, bit flags, variable DLC, optional bursts; adjustable total rate up to 2000 fr/s;
-  fully deterministic for a given seed.
+- **Simulator**: "Demo vehicle" (the messages of `demo_vehicle.dbc`) or "Raw patterns"
+  (12 invented IDs with counters, sines, random walks, bit flags, variable DLC, optional
+  bursts); adjustable total rate up to 2000 fr/s; fully deterministic for a given seed.
 - **Performance**: 100,000-frame ring buffer, 30 ms batched model updates; about 50 rendered
   frames/s at 2000 bus frames/s while capturing demo PNGs.
+- **Signal database (DBC)**: own parser for the common DBC subset, with clear, line-numbered
+  error messages for broken files. Load the bundled demo database with one click or open any
+  `.dbc` file; unload at any time.
+- **Decoding**: Intel and Motorola byte order, signed/unsigned, factor/offset, min/max range
+  checks, value tables, simple multiplexing, standard and extended IDs.
+- **Names or hex**: Trace and Messages show message names (or raw IDs, Ctrl+N); the selected
+  trace frame and expanded Messages rows show their decoded signals.
+- **Signals tab**: every signal grouped by message with live physical value, unit,
+  enumeration text, a 10 s sparkline and min/max seen; search, collapse, pin to the top.
+- **Signal detail**: live value and chart, start bit, length, byte order, scaling, range,
+  sender/receivers, comment, value table and a **bit layout** of the 8 data bytes showing which
+  bits the signal occupies (MSB/LSB marked, live bit values).
+- **Demo vehicle**: the simulator can drive the demo database with plausible physics (speed
+  ramps, rpm follows speed and gear, slow coolant warm-up, steering sweep, brake events);
+  the phase 1 random patterns remain available as "Raw patterns".
 - **Design**: dark and light themes with an animated switch, custom-styled controls,
   hand-drawn icons, WCAG AA contrast, keyboard shortcuts, empty states.
 
@@ -50,10 +75,12 @@ Demo video: _link to be added_
 | F5 | Start / stop the simulator |
 | Space or F6 | Pause / resume the view |
 | Ctrl+L | Clear trace and statistics |
-| Ctrl+F | Focus the ID filter |
+| Ctrl+F | Focus the ID filter (Signals tab: the search box) |
 | Esc | Leave a filter field / reset the filter |
 | End | Jump to the live end of the trace |
-| Ctrl+1 / Ctrl+2 | Trace / Messages tab |
+| Ctrl+1 / Ctrl+2 / Ctrl+3 | Trace / Messages / Signals tab |
+| Ctrl+O | Open a DBC file |
+| Ctrl+N | Toggle message names / hex IDs |
 | Ctrl+T | Toggle dark / light theme |
 
 ## Architecture
@@ -62,27 +89,63 @@ Demo video: _link to be added_
 flowchart LR
     subgraph worker["Simulator thread"]
         E["SimulatorEngine<br/>(seeded, deterministic)"] --> W["SimWorker<br/>10 ms precise timer"]
+        VM["VehicleModel<br/>(demo vehicle physics)"] --> E
     end
+    DBC[("demo_vehicle.dbc<br/>or user .dbc")] --> P["DbcParser"] --> DB["Database<br/>(immutable, shared)"]
+    DB --> VM
     W -- "framesReady(batch)<br/>queued signal" --> S
     subgraph gui["GUI thread"]
         S["CaptureSession<br/>collects + flushes every 30 ms"]
-        S --> ST["BusStatistics<br/>fr/s, bus load"]
-        S --> FM["FrameModel<br/>ring buffer 100k + filter index"]
-        S --> MO["MessageOverviewModel<br/>one row per ID"]
-        FM --> QT["QML Trace page<br/>ListView, pooled delegates"]
-        MO --> QM["QML Messages page"]
-        ST --> QS["Status bar chips"]
+        S --> ST["BusStatistics"]
+        S --> FM["FrameModel<br/>ring buffer 100k + filter"]
+        S --> MO["MessageOverviewModel"]
+        S --> SL["SignalListModel<br/>live values + 10 s history"]
+        DB --> D["Decoder<br/>(signal codec)"]
+        D --> FM
+        D --> MO
+        D --> SL
+        FM --> QT["Trace"]
+        MO --> QM["Messages"]
+        SL --> QS["Signals + sparklines<br/>+ detail / bit layout"]
     end
 ```
 
 - `src/core/` — **no Qt Quick dependency** (Qt Core only): `CanFrame`, `RingBuffer`,
-  `FrameSource` / `SimulatedSource` / `SimulatorEngine`, `FrameFilter`, `BusStatistics`,
-  `FrameModel`, `MessageOverviewModel`, `CaptureSession`.
+  `FrameSource` / `SimulatedSource` / `SimulatorEngine` / `VehicleModel`, `FrameFilter`,
+  `BusStatistics`, `FrameModel`, `MessageOverviewModel`, `CaptureSession`, and for phase 2
+  `DbcParser` / `Database` (`dbc.*`), the signal codec and `Decoder` (`signalcodec.*`),
+  `SignalDatabase` and `SignalListModel`. The demo database is a resource of this library.
 - `src/app/ui/` — module `CanUi`: the `Theme` token singleton, icons and components.
 - `src/app/style/` — module `CanStyle`: the custom Qt Quick Controls style.
 - `src/app/qml/` — module `CanAnalyzer`: the screens.
 - `tests/` — Qt Test suites run by CTest.
 - `docs/` — design system, decisions, progress log, plain-English explainer.
+
+## Signal databases
+
+**Load:** on the right of the tab row, *Load demo database* loads the bundled
+`demo_vehicle.dbc`; *Open DBC…* (Ctrl+O) opens any file. The pill shows the loaded file and
+its message/signal counts; the × unloads it. If a file cannot be loaded, a banner lists the
+problems with line numbers (for example `Line 5: SG_ Mode: start bit 70 is out of range
+(0-63)`) and the previously loaded database stays active.
+
+**Supported DBC subset**
+
+| Keyword | Supported |
+|---|---|
+| `BO_` | messages: ID (standard, or extended via bit 31), name, DLC 0–8, sender |
+| `SG_` | start bit, length 1–64, Intel (`@1`) / Motorola (`@0`), signed (`-`) / unsigned (`+`), factor, offset, min, max, unit, receivers |
+| `SG_ … M` / `mN` | simple multiplexing (one multiplexor per message) |
+| `VAL_` | value tables (enumerations) for signals |
+| `CM_` | comments: global, message, signal (may span lines) |
+| `BA_ "GenMsgCycleTime"` | message period |
+| `VERSION`, `NS_`, `BS_`, `BU_`, other `BA_*`, `VAL_TABLE_`, … | recognised and ignored |
+
+**Not supported (known limitations):** CAN FD (DLC > 8 is reported as an error), extended
+multiplexing (`m1M`, `SG_MUL_VAL_`), IEEE float/double signals (`SIG_VALTYPE_`), named value
+tables (`VAL_TABLE_` references), signal groups and environment variables. A file with any
+error is rejected as a whole; warnings (e.g. a comment for an unknown signal) do not block
+loading.
 
 ## Building
 
@@ -148,8 +211,9 @@ cmake --build --preset local-release --target deploy
 build\local-release\can_analyzer.exe
 ```
 
-Command-line options: `--rate <fps>` (initial rate, `0` = nominal ≈366/s), `--seed <n>`,
+Command-line options: `--rate <fps>` (initial rate, `0` = nominal), `--seed <n>`,
 `--capacity <frames>` (ring buffer size), `--demo`, `--layout-check`, `--evidence-dir <dir>`.
+The simulator starts in "Demo vehicle" mode; switch to "Raw patterns" in the toolbar.
 
 ## Opening the project in Qt Creator 21
 
@@ -218,43 +282,51 @@ that Windows SDK feature adds `cdb.exe`, which Qt Creator then detects automatic
 ## Demo mode
 
 ```bat
-can_analyzer.exe --demo --rate 2000
+can_analyzer.exe --demo --rate 1000
 powershell -ExecutionPolicy Bypass -File tools\zip-frames.ps1
 ```
 
-`--demo` plays a scripted 45 s scene (start, Trace, typing an ID filter, pause and resume,
-a slow-ID filter, scrolling away and jumping back, Messages and sorting, dark theme and
-back) and saves:
+`--demo` plays a scripted, **deterministic** scene of 45 s: live trace, loading the demo
+database, a decoded trace frame, expanded Messages rows, the Signals tab with search and
+pins, the signal detail with its bit layout, a theme switch and back. It saves:
 
-- `evidence/frames/frame_NNNN.png` — about 5 frames per second (≈225 frames),
-- `evidence/screenshots/01…05-*.png` — five named screenshots of the main screens,
-- `evidence/demo-log.txt` — render rate and bus rate every 5 s.
+- `evidence/frames/frame_NNNN.jpg` — 541 JPEG frames at exactly **12 fps** (1280 × 800,
+  quality 85). Simulated time, the script and every QML animation advance by exactly 1/12 s
+  per frame (manual clock + custom animation driver), so playback is smooth even though
+  capturing runs at whatever speed the machine renders.
+- `evidence/screenshots/01…06-*.png` — six named screenshots of the main screens.
+- `evidence/demo-log.txt` — progress and sizes.
 
 Only the application window is captured (`QQuickWindow::grabWindow` renders the window's
 own scene graph), never the desktop. `tools/zip-frames.ps1` packs the frames into
-`evidence/frames.zip`. `--layout-check` captures edge cases (empty states, minimum window
-size, filter errors, detached and paused views) into `evidence/checks/`.
-`evidence/` is git-ignored.
+`evidence/frames.zip` (about 38 MB). Assemble a video with any tool, e.g.
+`ffmpeg -framerate 12 -i frame_%04d.jpg -c:v libx264 -pix_fmt yuv420p demo.mp4`.
+`--layout-check` captures edge cases (no database, a broken DBC file, minimum window size,
+multiplexed message, raw mode) into `evidence/checks/`. `evidence/` is git-ignored.
 
 ## Roadmap
 
-1. **Decoding**: a message/signal database (own format, then DBC import), physical values
-   with units next to the raw bytes.
-2. **Plots**: live signal charts with cursors and zoom.
+1. ~~**Decoding**~~ — done in phase 2: DBC subset, decoder, signal list, bit layout.
+2. **Plots**: live multi-signal charts with cursors and zoom (the signal history and
+   sparkline renderer are the starting point).
 3. **Logging**: record to an open log format with triggers and pre-trigger buffer.
 4. **Replay**: a `FrameSource` that replays logs at 1×/n× speed; the rest of the app is
    already source-agnostic.
-5. Hardware adapters behind the same `FrameSource` interface; CAN FD.
+5. More DBC: extended multiplexing, float signals, CAN FD; hardware adapters behind the same
+   `FrameSource` interface.
 
 ## Licensing
 
 - Qt is used under the open-source **GNU LGPL v3**, **dynamically linked** (the Qt DLLs
   are separate files and can be replaced by the user). No Qt source code is modified.
 - Qt modules used: **Qt Core, Qt Gui, Qt Qml, Qt Quick, Qt Quick Controls 2** (incl.
-  Templates and the Basic fallback style), **Qt Quick Effects** (shadows, via the
-  `QtQuick.Effects` QML module), **Qt Svg** (icon rendering), and **Qt Test** (tests only).
+  Templates and the Basic fallback style), **Qt Quick Dialogs** (file dialog), **Qt Quick
+  Effects** (shadows, via the `QtQuick.Effects` QML module), **Qt Svg** (icon rendering), and
+  **Qt Test** (tests only).
 - Fonts are not shipped: the app uses Segoe UI Variable / Cascadia Mono already installed
   with Windows.
 - No proprietary code, data, DBC files, captures or configurations are included. All CAN
-  IDs, message names and payloads are invented and generated by the simulator. The icons
+  IDs, message and signal names and payloads are invented and generated by the simulator;
+  `demo_vehicle.dbc` is an invented example written for this project (the DBC text format
+  itself is a public, widely documented format). The DBC parser is original code. The icons
   are original.

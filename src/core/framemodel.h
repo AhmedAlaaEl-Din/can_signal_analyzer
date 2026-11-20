@@ -3,6 +3,9 @@
 #include "canframe.h"
 #include "framefilter.h"
 #include "ringbuffer.h"
+#include "dbc.h"
+
+#include <memory>
 
 #include <QAbstractTableModel>
 
@@ -37,6 +40,7 @@ public:
         OrdinalRole, // stable running index inside the filtered view (zebra striping)
         FreshRole,   // true for rows added by the most recent append()
         DeltaRole,   // time since the previous frame with the same ID, ms text
+        MessageNameRole, // name from the loaded database ("" if unknown)
     };
     Q_ENUM(Role)
 
@@ -67,6 +71,10 @@ public:
     std::int64_t deltaAt(int row) const;
     Q_INVOKABLE int rowForSeq(qulonglong seq) const; // -1 if not visible
 
+    void setDatabase(std::shared_ptr<const Database> db);
+    // Decoded signals of a view row (empty without a database / unknown ID).
+    Q_INVOKABLE QVariantList decodedSignals(int row) const;
+
 signals:
     void countChanged();
     void capacityChanged();
@@ -89,6 +97,7 @@ private:
     std::uint64_t m_removedFromFront = 0; // for stable ordinals
     std::uint64_t m_freshFromSeq = 0;
     FrameFilter m_filter;
+    std::shared_ptr<const Database> m_db;
 };
 
 } // namespace can

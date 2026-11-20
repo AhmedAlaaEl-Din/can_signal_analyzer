@@ -2,6 +2,9 @@
 
 #include "busstatistics.h"
 #include "canframe.h"
+#include "dbc.h"
+
+#include <memory>
 
 #include <QAbstractTableModel>
 
@@ -43,7 +46,9 @@ public:
         DataRole,       // "01 02 .."
         BytesRole,      // QStringList, one entry per byte
         ChangedMaskRole,// bit i set: byte i changed in the most recent update
-        ChangeSerialRole// increases whenever ChangedMask is refreshed for the row
+        ChangeSerialRole,// increases whenever ChangedMask is refreshed for the row
+        MessageNameRole, // from the loaded database ("" if unknown)
+        DecodedRole,     // decoded signals of the last frame (QVariantList)
     };
 
     explicit MessageOverviewModel(QObject *parent = nullptr);
@@ -65,6 +70,7 @@ public:
     void update(const CanFrame *frames, std::size_t count);
     void update(const std::vector<CanFrame> &frames) { update(frames.data(), frames.size()); }
     void clear();
+    void setDatabase(std::shared_ptr<const Database> db);
 
     // For tests.
     struct Entry
@@ -92,6 +98,7 @@ private:
     std::unordered_map<std::uint32_t, int> m_rowByKey;
     int m_sortColumn = IdColumn;
     Qt::SortOrder m_sortOrder = Qt::AscendingOrder;
+    std::shared_ptr<const Database> m_db;
 };
 
 } // namespace can

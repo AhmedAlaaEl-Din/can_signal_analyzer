@@ -137,3 +137,92 @@ Findings → changes:
   README describes a manual kit (Qt version, auto-detected VS 2026 compiler, Qt's CMake,
   Ninja via `CMAKE_MAKE_PROGRAM`). CDB is not installed, so debugging with the MSVC kit is
   not available until the Windows SDK debugging tools are added.
+
+---
+
+# Phase 2: signal database, decoding, signal list
+
+## Core
+- **Own DBC parser** (`src/core/dbc.*`), statement-oriented: `BO_`/`SG_` per line, `;`-terminated
+  statements (`CM_`, `VAL_`, `BA_`, ...) may span lines (multi-line comments work). Errors carry
+  the line number of the statement start and a plain-English message. A file with any error is
+  rejected as a whole (no half-loaded database); warnings (unknown references, unsupported
+  keywords) do not block loading.
+- **Supported subset:** `BO_` (standard + extended IDs via bit 31), `SG_` (Intel/Motorola,
+  signed/unsigned, factor/offset, min/max, unit, receivers), simple multiplexing (`M` / `mN`),
+  `VAL_`, `CM_` (global, message, signal), `BA_ "GenMsgCycleTime"` (used as the message period).
+  **Not supported:** CAN FD (DLC > 8 is reported as an error), extended multiplexing (`m1M`,
+  `SG_MUL_VAL_`), float/double signals (`SIG_VALTYPE_`), signal groups, environment variables,
+  attribute definitions other than the cycle time, value tables by name (`VAL_TABLE_`).
+- **Strict geometry check:** a signal whose bits do not fit into its message's DLC is an error,
+  because it could never be decoded.
+- **Codec** (`signalcodec.*`): one routine lists the occupied data bits MSB→LSB for both byte
+  orders (DBC "sawtooth" numbering for Motorola); extraction, insertion and the bit-layout view
+  all use it, so they cannot disagree. Physical = raw × factor + offset; encoding rounds and
+  clamps to the representable raw range.
+- **Value formatting:** decimals derived from factor/offset (0.01 → 2, 0.125 → 3, capped at 4).
+- **Demo database** `demo_vehicle.dbc`: 9 invented messages, 43 signals, bundled as a Qt
+  resource of the core library. Deliberately covers Intel + Motorola, signed values, signals
+  that cross byte boundaries, value tables, a multiplexed message and an extended ID.
+- **Simulator vehicle mode:** a deterministic `VehicleModel` (drive cycle idle → accelerate →
+  cruise → brake, rpm from speed and gear ratios, first-order lags, coolant warm-up with a
+  70 s time constant, steering sweep, battery, trip computer) is advanced to each frame's
+  timestamp and encodes signals through the same codec. Raw mode (phase 1 patterns) is still
+  selectable ("Source: Raw patterns"); bursts only exist in raw mode.
+- **Signal list model:** flat list (headers + signals) rebuilt on search/collapse/pin; live
+  values only emit `dataChanged` (one notification per 30 ms batch). Pinned signals move to a
+  "Pinned" group at the top. History: one bucket per 40 ms with value + min/max, ~12 s ring.
+- **Messages "decoded" role** decodes on demand, so only expanded rows cost anything.
+- **Trace expansion:** the selected frame expands to show its decoded signals (frames are
+  immutable, so decoding happens once on selection).
+
+## UI
+- New Signals tab (grouped list, search, collapse, pin, sparkline, min/max seen, enum chip)
+  and a detail panel (live value + 10 s chart, bit layout, definition, comment, value table).
+- **Sparklines** are a small C++ `QQuickPaintedItem` that reads the history directly from the
+  model (no QVariant lists per frame); QML only passes model, signal id and a revision.
+- Database controls live in the tab row (contextual), the toolbar stays capture-related; a
+  "Source" selector was added there. Names | Hex is a segmented toggle (Ctrl+N).
+- Bad database files: dismissible error banner with the first problems and line numbers; the
+  previously loaded database stays active.
+
+## Demo capture (Phase 2)
+- **Deterministic 12 fps:** `--demo` switches the session to a manual clock and installs a
+  custom `QAnimationDriver`; per frame the scene, the simulator (exactly 1/12 s) and all QML
+  animations advance, then `grabWindow()` renders the window. Qt's single-threaded "basic"
+  render loop is selected for this process so the driver controls all animation time.
+- **Size budget:** the first capture (JPEG quality 90 at 1600 × 1000 device pixels, Windows
+  scaling 125 %) was 95.8 MB. Frames are now stored at the window's logical size
+  (1280 × 800, smooth downscale) and quality 90 still gave 64.7 MB, so the quality was lowered
+  to **85** → 541 frames, 54.6 MB, **frames.zip 38.2 MB**.
+- In the scene the trace is **paused** before a row is selected: at 1000 fr/s a selected row
+  scrolls away within one batch while following the live end (a real user would pause too).
+
+## Design review — Phase 2, round 1
+1. Alive counters (0–15 every 16 frames) rendered as an aliased hatch in the sparklines. →
+   History buckets keep min/max; buckets wider than 20 % of the visible range are drawn as a
+   soft band instead of a line.
+2. The bit layout (key feature) was below the fold in the detail panel. → Moved directly under
+   the live value; chart height 64 → 52 px.
+3. The trace screenshot showed no expanded row (it scrolled away). → Demo pauses first.
+4. Messages: the expand chevron sat on the card edge next to the accent bar. → Inside the name
+   column, ID column widened when a database is loaded.
+5. `Sparkline.fillColor` shadowed `QQuickPaintedItem::fillColor`. → Renamed `areaColor`.
+6. Frames 95.8 MB. → Logical-size frames (see above).
+
+## Design review — Phase 2, round 2
+1. Guide lines under decoded values read as underlines (busy). → Lower alpha.
+2. Frames still 64.7 MB. → JPEG quality 85.
+3. `DelegateModel::cancel` warnings while typing in search (reused delegates during model
+   resets). → No delegate reuse in the (small) signal list.
+4. Verified: Motorola bit layout (EngineTorque 39|12 → B4 7..0 + B5 7..4, MSB solid, LSB
+   outlined), counters as calm bands, paused trace with decoded expansion.
+
+## Design review — Phase 2, round 3 (layout check)
+1. **Bug:** at the 960 × 600 minimum size with the detail panel open, the list's implicit
+   width pushed the 384 px panel off-screen. → List may shrink (min 300 px), panel width
+   adapts (40 % of the page, 300–384 px), lower-priority columns drop out (MIN–MAX below
+   760 px, STATE below 600 px), Collapse/Expand become icon-only.
+2. Verified: bad-DBC banner with line numbers, no-database empty state with actions,
+   multiplexed TripComputer decoding only the current page, wide window, raw mode.
+3. Final frames and screenshots were re-captured after this round.

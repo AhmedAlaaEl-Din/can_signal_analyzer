@@ -44,6 +44,12 @@ void fileMessageHandler(QtMsgType type, const QMessageLogContext &, const QStrin
 
 int main(int argc, char *argv[])
 {
+    // Deterministic demo capture drives all animations from a custom driver;
+    // that needs the single-threaded render loop (set for this process only).
+    for (int i = 1; i < argc; ++i) {
+        if (qstrcmp(argv[i], "--demo") == 0)
+            qputenv("QSG_RENDER_LOOP", "basic");
+    }
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("CAN Analyzer"));
     QGuiApplication::setApplicationVersion(QStringLiteral(CAN_ANALYZER_VERSION));
@@ -93,7 +99,7 @@ int main(int argc, char *argv[])
 
     QQuickStyle::setStyle(QStringLiteral("CanStyle"));
 
-    auto *source = new can::SimulatedSource(seed);
+    auto *source = new can::SimulatedSource(seed, can::SimulatorEngine::Mode::Vehicle);
     can::CaptureSession session(source);
     session.setTargetRate(parser.value(rateOption).toInt());
     session.setBurstsEnabled(true);

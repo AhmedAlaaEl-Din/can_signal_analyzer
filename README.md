@@ -1,6 +1,6 @@
 # CAN Analyzer
 
-▶ **[Watch the 1-minute demo video on YouTube](https://youtu.be/ILNY42n71yI)**
+▶ **[Watch the 1-minute demo video on YouTube](https://youtu.be/ILNY42n71yI)** · ⬇ **[Download for Windows (portable zip)](https://github.com/AhmedAlaaEl-Din/can_signal_analyzer/releases/latest)**
 
 **A Windows desktop tool for watching, decoding, recording and replaying CAN bus traffic.**
 CAN Analyzer streams thousands of frames per second into a live trace, decodes them with a
@@ -157,7 +157,9 @@ Reproduce: `can_analyzer --plot-bench result.txt`, `can_charts_bench result.txt`
 
 ## Run the release zip
 
-1. Unzip `CANSignalAnalyzer-1.0.0-win64.zip` anywhere (no installation, no admin rights;
+1. Download `CANSignalAnalyzer-1.0.0-win64.zip` from the
+   [latest release](https://github.com/AhmedAlaaEl-Din/can_signal_analyzer/releases/latest) and unzip it
+   anywhere (no installation, no admin rights;
    the Qt and Visual C++ runtimes are inside).
 2. Start `can_analyzer.exe` and click **Start with the demo**.
 3. Open `samples\demo_drive_60s.canlog` (Ctrl+Shift+O, or drag it onto the window) to try
